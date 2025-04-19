@@ -1,0 +1,1 @@
+huggingface-cli download microsoft/llava-med-v1.5-mistral-7b --repo-type model --local-dir ./weight/llava_med
