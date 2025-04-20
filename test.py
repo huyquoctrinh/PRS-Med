@@ -65,7 +65,7 @@ if __name__ == "__main__":
     batch_input_ids = input_ids.repeat(batch_size, 1)
     batch_input_ids = batch_input_ids.to(model.device)
     print(batch_input_ids.shape)
-
+    print(image_tensor.shape)
     model.eval()
     output_ids = model.extract_last_hidden_state(
             batch_input_ids,

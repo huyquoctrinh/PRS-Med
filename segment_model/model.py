@@ -7,7 +7,7 @@ from llava.mm_utils import process_images, tokenizer_image_token, get_model_name
 import torch.nn as nn
 from tinysam import sam_model_registry, SamHierarchicalMaskGenerator
 import torch 
-from segment_model.mask_decoder import MaskDecoder
+from segment_model.mask_decoder import PromptedMaskDecoder
 
 class ImageEncoder(nn.Module):
     def __init__(self, model_type, checkpoint_path):
@@ -45,13 +45,15 @@ class LLMSeg(nn.Module):
             device=self.device
         )
 
-        self.mask_decoder = MaskDecoder(
+        # self.model = self.model.to_fp32()
+
+        self.mask_decoder = PromptedMaskDecoder(
             image_embed_dim=256,
-            prompt_embed_dim=1024,
+            prompt_embed_dim=4096,
             common_dim=256,
             num_heads=8,
             num_layers=4,
-            target_mask_size=(512, 512)
+            target_mask_size=(1024, 1024)
         )
 
         self.image_encoder = ImageEncoder(
@@ -60,23 +62,50 @@ class LLMSeg(nn.Module):
         ).to(self.device)
         self.image_encoder.eval()
 
+    def get_model_utils(self):
+        return self.tokenizer, self.image_processor, self.context_len, self.model.config
+
     def forward(self,
         input_ids,
-        image_tensor,
-        temperature=0.7,
+        image_tensor_for_vlm,
+        image_tensor_for_image_enc,
+        temperature=0.0001,
         max_new_tokens=512,
         top_p=0.95
     ):
-        prompt_embedding = self.model.extract_last_hidden_state(
-            input_ids,
-            images=image_tensor,
-            do_sample=True if temperature > 0 else False,
-            temperature=temperature,
-            max_new_tokens=max_new_tokens,
-            top_p=top_p
-        )
-        image_embedding = self.image_encoder(image_tensor)
+        with torch.no_grad():
+            prompt_embedding = self.model.extract_last_hidden_state(
+                input_ids,
+                images=image_tensor_for_vlm,
+                do_sample=True if temperature > 0 else False,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
+                top_p=top_p
+            )['hidden_states'][-1]
+        # print(prompt_embedding)
+        with torch.no_grad():
+            image_embedding = self.image_encoder(image_tensor_for_image_enc)
+        # print(image_embedding)
         final_mask = self.mask_decoder(
             image_embedding, prompt_embedding
         )
         return final_mask
+
+
+def build_llm_seg(
+        model_path, 
+        model_base=None, 
+        load_8bit=False, 
+        load_4bit=False, 
+        device="cuda:0"
+):
+    llm_seg = LLMSeg(
+        model_path=model_path,
+        model_base=model_base,
+        load_8bit=load_8bit,
+        load_4bit=load_4bit,
+        device=device
+    )
+
+    tokenizer, image_processor, context_len, config = llm_seg.get_model_utils()
+    return llm_seg, tokenizer, image_processor, config

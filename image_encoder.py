@@ -10,6 +10,6 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 sam.eval()
 # print(sam.image_encoder)
 image_encoder = sam.image_encoder.to(device)
-inputs = torch.randn(1, 3, 1024, 1024).to(device)
+inputs = torch.randn(1, 3, , 512).to(device)
 out = image_encoder(inputs)
 print(out.shape)
