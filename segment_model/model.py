@@ -10,6 +10,7 @@ import torch
 from segment_model.mask_decoder import PromptedMaskDecoder
 import peft
 from peft import LoraConfig, TaskType, get_peft_model
+from peft import PeftModel
 
 class ImageEncoder(nn.Module):
     def __init__(self, model_type, checkpoint_path):
@@ -74,6 +75,21 @@ class LLMSeg(nn.Module):
 
     def get_model_utils(self):
         return self.tokenizer, self.image_processor, self.context_len, self.base_model.config
+    
+    def save_model(self, save_path):
+        self.model.save_pretrained(save_path + "/lora_adapter")
+        self.tokenizer.save_pretrained(save_path + "/lora_adapter")
+        torch.save(self.mask_decoder.state_dict(), save_path + "/mask_decoder.pth")
+
+    def load_model(self, load_path):
+        print("Loading model from:", load_path)
+        self.model = PeftModel.from_pretrained(self.base_model, load_path + "/lora_adapter")
+        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter")
+        self.mask_decoder.load_state_dict(torch.load(load_path + "/mask_decoder.pth"))
+        self.mask_decoder.to(self.device)
+        self.mask_decoder.eval()
+        self.model = self.model.merge_and_unload()
+        self.model.eval()
 
     def forward(self,
         input_ids,
@@ -92,6 +108,7 @@ class LLMSeg(nn.Module):
                 max_new_tokens=max_new_tokens,
                 top_p=top_p
             )["hidden_states"][-1]
+
         # print("======================")
         # print("Input ids:", input_ids)
         # print("Global embedding:", torch.mean(prompt_embedding, dim=1))

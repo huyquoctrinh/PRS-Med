@@ -1,1 +1,13 @@
 2025-04-21 21:07:39,179 - INFO - Epoch [1/10], Loss: 0.0006669506487284323
+2025-04-21 21:46:24,747 - INFO - Epoch [1/10], Loss: 0.4613214135764896
+2025-04-21 21:50:48,209 - INFO - Epoch [1/10], Val mean Dice Score: 0.850733955164826
+2025-04-21 22:06:49,608 - INFO - Epoch [2/10], Loss: 0.33693864861566986
+2025-04-21 22:11:12,767 - INFO - Epoch [2/10], Val mean Dice Score: 0.8720011216379391
+2025-04-21 22:27:14,305 - INFO - Epoch [3/10], Loss: 0.30801829460710856
+2025-04-21 22:31:37,821 - INFO - Epoch [3/10], Val mean Dice Score: 0.8688114754374037
+2025-04-21 22:34:38,024 - INFO - Epoch [1/10], Loss: 0.002665618277321297
+2025-04-21 22:36:33,890 - INFO - Epoch [1/10], Loss: 0.0026598970699672916
+2025-04-21 22:36:34,743 - INFO - Epoch [1/10], Val mean Dice Score: 0.11847325414419174
+2025-04-21 22:40:18,116 - INFO - Epoch [1/10], Loss: 0.0026389522017634865
+2025-04-21 22:40:18,969 - INFO - Epoch [1/10], Val mean Dice Score: 0.1576962172985077
+2025-04-21 22:40:19,023 - INFO - Already found a `peft_config` attribute in the model. This will lead to having multiple adapters in the model. Make sure to know what you are doing!

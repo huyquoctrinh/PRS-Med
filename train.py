@@ -42,6 +42,7 @@ def evaluate(model, val_loader, device="cuda:0"):
             # print("loss:", loss.item())
             # print("dice_score_value:", dice_score_value)
             dice_score_list.append(dice_score_value.item())
+        # break
     mean_dice = sum(dice_score_list) / len(dice_score_list)
     return mean_dice
         
@@ -64,7 +65,7 @@ def train(
         for batch in progress_bar:
             # cnt +=1
             # if cnt > 10:
-                # break
+            #     break
             optimizer.zero_grad()
             input_ids = batch['input_ids'].to(device)
             image_tensor = batch['image_tensor'].to(device)
@@ -96,7 +97,8 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-
+        model.save_model(f"weights/llm_seg_{epoch+1}")
+        # break
 device = "cuda:0"
 model, tokenizer, image_processor, config = build_llm_seg(
     model_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/llava-med-v1.5-mistral-7b",
@@ -133,3 +135,5 @@ train(
     num_epochs=10,
     device=device
 )
+
+# model.load_model("weights/llm_seg_1")

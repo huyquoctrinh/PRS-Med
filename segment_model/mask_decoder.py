@@ -145,7 +145,7 @@ class PromptedMaskDecoder(nn.Module):
         nn.init.xavier_uniform_(self.attn.out_proj.weight)
         nn.init.zeros_(self.attn.in_proj_bias)
         nn.init.zeros_(self.attn.out_proj.bias)
-        
+
         self.decoder = nn.Sequential(
             nn.Conv2d(image_dim, image_dim // 2, kernel_size=3, padding=1),
             nn.ReLU(),
