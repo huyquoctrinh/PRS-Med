@@ -10,6 +10,13 @@ from llava.model.builder import load_pretrained_model
 from data_utils.dataset import create_dataloader
 from loss import structure_loss, dice_score
 from tqdm import tqdm
+import logging
+
+logging.basicConfig(
+    filename='logs/training.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 def count_train_parameters(model):
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
@@ -17,9 +24,10 @@ def count_train_parameters(model):
     print(f"Number of trainable parameters: {num_params / 1e6:.2f}M")
     return num_params
 
-def evaluate(model, dataloader, device="cuda:0"): 
+def evaluate(model, val_loader, device="cuda:0"): 
     dice_score_list = []
-    for batch in tqdm(dataloader, desc="Evaluating"):
+    print("Number of val sample", len(val_loader))
+    for batch in tqdm(val_loader, desc="Evaluating"):
         model.eval()
         model.to(device)
         input_ids = batch['input_ids'].to(device)
@@ -30,13 +38,13 @@ def evaluate(model, dataloader, device="cuda:0"):
             outputs = model(input_ids, image_tensor, image_sam_tensor)
             # print("outputs:", outputs)
             dice_score_value = dice_score(outputs, mask_tensor)
+            # print("Dice score value:", dice_score_value)
             # print("loss:", loss.item())
             # print("dice_score_value:", dice_score_value)
             dice_score_list.append(dice_score_value.item())
-        mean_dice = sum(dice_score_list) / len(dice_score_list)
-        return mean_dice
+    mean_dice = sum(dice_score_list) / len(dice_score_list)
+    return mean_dice
         
-
 def train(
     model,
     full_loader,
@@ -61,7 +69,6 @@ def train(
             input_ids = batch['input_ids'].to(device)
             image_tensor = batch['image_tensor'].to(device)
             mask_tensor = batch['mask_tensor'].to(device)
-            # answers_ids = batch['answers_ids'].to(device)
             image_sam_tensor = batch['image_sam'].to(device)
             with autocast(dtype=torch.float16, device_type=device):
                 outputs = model(input_ids, image_tensor, image_sam_tensor)
@@ -84,9 +91,11 @@ def train(
         # model.eval()
         ep_loss /= len(dataloader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {ep_loss}")
+        logging.info(f"Epoch [{epoch+1}/{num_epochs}], Loss: {ep_loss}")
         model.eval()
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
+        logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
 
 device = "cuda:0"
 model, tokenizer, image_processor, config = build_llm_seg(
@@ -103,7 +112,7 @@ dataloader = create_dataloader(
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
-    batch_size=1,
+    batch_size=4,
     mode="train"
 )
 
@@ -114,6 +123,7 @@ optimizer = torch.optim.AdamW(
     lr=1e-4,
     weight_decay=0.01
 )
+
 train_params = count_train_parameters(model)
 print("Trainable parameters:", train_params)
 train(

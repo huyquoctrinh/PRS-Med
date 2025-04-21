@@ -31,8 +31,8 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                 model = LlavaMistralForCausalLM.from_pretrained(
                     model_path,
                     low_cpu_mem_usage=True,
-                    # attn_implementation="flash_attention_2",
-                    attn_implementation=None,
+                    attn_implementation="flash_attention_2",
+                    # attn_implementation=None,
                     **kwargs
                 )
     else:

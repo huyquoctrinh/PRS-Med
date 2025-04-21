@@ -141,6 +141,11 @@ class PromptedMaskDecoder(nn.Module):
         # cross-attention: image tokens attend to prompt
         self.attn = nn.MultiheadAttention(embed_dim=image_dim, num_heads=8, batch_first=True)
 
+        nn.init.xavier_uniform_(self.attn.in_proj_weight)
+        nn.init.xavier_uniform_(self.attn.out_proj.weight)
+        nn.init.zeros_(self.attn.in_proj_bias)
+        nn.init.zeros_(self.attn.out_proj.bias)
+        
         self.decoder = nn.Sequential(
             nn.Conv2d(image_dim, image_dim // 2, kernel_size=3, padding=1),
             nn.ReLU(),

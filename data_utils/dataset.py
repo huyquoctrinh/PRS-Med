@@ -7,7 +7,7 @@ from llava.mm_utils import process_images
 from torchvision import transforms 
 import os 
 
-IGNORE_INDEX = -100
+IGNORE_INDEX = 0
 MAX_PROMPT_LENGTH = 512
 
 class PromptSegmentDataset(Dataset):

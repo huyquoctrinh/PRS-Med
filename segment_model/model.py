@@ -8,6 +8,8 @@ import torch.nn as nn
 from tinysam import sam_model_registry, SamHierarchicalMaskGenerator
 import torch 
 from segment_model.mask_decoder import PromptedMaskDecoder
+import peft
+from peft import LoraConfig, TaskType, get_peft_model
 
 class ImageEncoder(nn.Module):
     def __init__(self, model_type, checkpoint_path):
@@ -34,9 +36,17 @@ class LLMSeg(nn.Module):
         super(LLMSeg, self).__init__()
         disable_torch_init()
         self.device = device        
-
+        peft_config = LoraConfig(
+            task_type=TaskType.SEQ_2_SEQ_LM, 
+            target_modules=["q_proj", "v_proj"],
+            inference_mode=False, 
+            r=8, 
+            lora_alpha=32, 
+            lora_dropout=0.1
+        )
+        
         model_name = get_model_name_from_path(model_path)
-        self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
+        self.tokenizer, self.base_model, self.image_processor, self.context_len = load_pretrained_model(
             model_path,
             model_base,
             model_name,
@@ -44,9 +54,11 @@ class LLMSeg(nn.Module):
             load_4bit,
             device=self.device
         )
-        self.model.eval()
-        for param in self.model.parameters():
-            param.requires_grad = False
+        self.base_model.eval()
+
+        self.model = get_peft_model(self.base_model, peft_config)
+        # for param in self.model.parameters():
+        #     param.requires_grad = False
 
         # self.model = self.model.to_fp32()
 
@@ -61,7 +73,7 @@ class LLMSeg(nn.Module):
             param.requires_grad = False
 
     def get_model_utils(self):
-        return self.tokenizer, self.image_processor, self.context_len, self.model.config
+        return self.tokenizer, self.image_processor, self.context_len, self.base_model.config
 
     def forward(self,
         input_ids,
