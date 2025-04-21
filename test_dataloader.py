@@ -20,13 +20,14 @@ dataloader = create_dataloader(
     data_config=model.config,
     image_processor=image_processor,
     tokenizer=tokenizer,
-    batch_size=2,
+    batch_size=4,
     mode="train"
 )
 
 for batch in dataloader:
     # print(batch)
     print(batch['input_ids'].shape)
+    print(batch['input_ids'])
     print(batch['image_tensor'].shape)
     print(batch['mask_tensor'].shape)
     print(batch['answers_ids'].shape)

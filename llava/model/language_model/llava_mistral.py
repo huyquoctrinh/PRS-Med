@@ -120,7 +120,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
                 images,
                 image_sizes=image_sizes
             )
-            print("Image is not none")
+            # print("Image is not none")
         else:
             inputs_embeds = self.get_model().embed_tokens(inputs)
 

@@ -59,14 +59,14 @@ class PromptSegmentDataset(Dataset):
 
     def prompt_process(self, prompt):
         # Process the prompt to get the input_ids and attention_mask
-        prompt_for_vlm = "<image> " + prompt
-        input_ids = tokenizer_image_token(        
+        prompt_for_vlm = "<image> " + "You are doing the segmentation." + prompt
+        input_ids = tokenizer_image_token(
             prompt_for_vlm, 
             self.tokenizer, 
             self.IMAGE_TOKEN_INDEX, 
             return_tensors='pt'
-        ).unsqueeze(0)
-        
+        )
+        # print("Input ids key full:", input_ids)
         return input_ids
     
     def process_image(self, image_path):
@@ -163,15 +163,33 @@ def create_dataloader(
         tokenizer=tokenizer,
         mode=mode
     )
-    
-    dataloader = DataLoader(
+
+    train_dataset, val_dataset = torch.utils.data.random_split(
         dataset, 
+        [int(len(dataset) * 0.8), len(dataset) - int(len(dataset) * 0.8)]
+    )
+    
+    train_dataloader = DataLoader(
+        train_dataset, 
         batch_size=batch_size, 
         shuffle=True, 
         collate_fn=collate_fn,
         num_workers=4,
         pin_memory=True
     )
+
+    val_dataset = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        collate_fn=collate_fn,
+        num_workers=4,
+        pin_memory=True
+    )
+    dataloader = {
+        "train": train_dataloader,
+        "val": val_dataset
+    }
     
     return dataloader
 

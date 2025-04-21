@@ -117,95 +117,155 @@ class SkipConnection(nn.Module):
         return x
 
 class PromptedMaskDecoder(nn.Module):
-    def __init__(self, 
-                 image_embed_dim=256,
-                 prompt_embed_dim=768,
-                 common_dim=256,
-                 num_heads=8,
-                 num_layers=4,
-                 target_mask_size=(512, 512)):
+    def __init__(self, prompt_dim=4096, image_dim=256, hidden_dim=512):
         super().__init__()
-        self.common_dim = common_dim
-        self.target_mask_size = target_mask_size
 
-        # Project image and prompt into shared token space
-        self.image_proj = nn.Conv2d(
-            image_embed_dim, 
-            common_dim, 
-            kernel_size=3,
-            stride=1,
-            padding=1
+        self.prompt_projection = nn.Sequential(
+            nn.Linear(prompt_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim, eps = 1e-5),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, image_dim),
+            nn.LayerNorm(image_dim, eps = 1e-5),
+            nn.ReLU()
         )
+
+        for layer in self.prompt_projection:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
+            elif isinstance(layer, nn.LayerNorm):
+                nn.init.ones_(layer.weight)
+                nn.init.zeros_(layer.bias)
+
+        # cross-attention: image tokens attend to prompt
+        self.attn = nn.MultiheadAttention(embed_dim=image_dim, num_heads=8, batch_first=True)
+
+        self.decoder = nn.Sequential(
+            nn.Conv2d(image_dim, image_dim // 2, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(image_dim // 2, 1, kernel_size=1)
+        )
+
+    def forward(self, image_feat, prompt_feat):
+        """
+        image_feat: (B, 256, 64, 64) - float32
+        prompt_feat: (B, T, 2048) - float16
+        """
+        B, _, H, W = image_feat.shape
+        T = prompt_feat.shape[1]
+
+        prompt_feat = prompt_feat.float()
+        # print("prompt_proj before nan or inf:", torch.isnan(prompt_feat).any(), torch.isinf(prompt_feat).any())
         
-        self.prompt_proj = nn.Linear(prompt_embed_dim, common_dim)
-        # Transformer layers (no mask token)
-        decoder_layer = nn.TransformerDecoderLayer(
-            d_model=common_dim,
-            nhead=num_heads,
-            dim_feedforward=512,
-            dropout=0.1,
-            activation='relu',
-            batch_first=True
-        )
-        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-        self.ln1 = nn.LayerNorm(common_dim)
-        self.ln2 = nn.LayerNorm(common_dim)
-        # self.cross_attn = nn.MultiheadAttention(embed_dim=common_dim, num_heads=num_heads, batch_first=True)
+        prompt_proj = self.prompt_projection(prompt_feat)  # (B, T, hidden_dim)
+        # print("prompt_proj nan or inf:", torch.isnan(prompt_proj).any(), torch.isinf(prompt_proj).any())
+        # print("position of nan:", torch.where(torch.isnan(prompt_proj)))
+        image_flat = image_feat.flatten(2).transpose(1, 2)  # (B, H*W, hidden_dim)
+        attn_out, _ = self.attn(image_flat, prompt_proj, prompt_proj)  # (B, H*W, hidden_dim)
+        # print("image_proj nan or inf:", torch.isnan(image_feat).any(), torch.isinf(image_feat).any())
 
-        # Predict coarse mask from image tokens
-        self.mask_head = nn.Sequential(
-            nn.Linear(common_dim, common_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(common_dim, 1)
-        )
+        # print("attn_out nan or inf:", torch.isnan(attn_out).any(), torch.isinf(attn_out).any())
 
-        # Refinement: upsample 64 → 128 → 256 → 512
-        # self.mask_refiner = nn.Sequential(
-        #     nn.ConvTranspose2d(1, 64, kernel_size=4, stride=2, padding=1),  # 128
-        #     nn.ReLU(inplace=True),
-        #     nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # 256
-        #     nn.ReLU(inplace=True),
-        #     nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # 512
-        #     nn.ReLU(inplace=True),
-        #     nn.Conv2d(16, 1, kernel_size=3, padding=1)
-        # )
-        self.batch_norm = nn.BatchNorm2d(image_embed_dim)
-    def forward(self, image_embedding, prompt_features):
-        B, C, H, W = image_embedding.shape
-        image_embedding = image_embedding.to(torch.float32)  
-        prompt_features = prompt_features.to(torch.float32)  
-        prompt_features = F.normalize(prompt_features, p=2, dim=-1)  # Normalize prompt features
-        print(prompt_features.shape)
-        # print(normalized_image_embedding)
-        # print("=============")
-        # print("=============")
-        image_tokens = self.image_proj(image_embedding)  # (B, common_dim, H, W)
-        image_tokens = self.batch_norm(image_tokens)
-        image_tokens = nn.ReLU()(image_tokens)
-        image_tokens = image_tokens.flatten(2).transpose(1, 2)  # (B, H*W, common_dim)
+        attn_map = attn_out.transpose(1, 2).reshape(B, -1, H, W)  # (B, hidden_dim, H, W)
 
-        prompt_proj = self.prompt_proj(prompt_features)  # (B, T, common_dim)
-        # prompt_proj = nn.ReLU()(prompt_proj)
-        prompt_proj = nn.Tanh()(prompt_proj)
+        mask = self.decoder(attn_map)  # (B, 1, H, W)
+        mask = F.interpolate(mask, scale_factor=8, mode='bilinear')
+        # print(mask.shape)
+        return mask
+
+# class PromptedMaskDecoder(nn.Module):
+#     def __init__(self, 
+#                  image_embed_dim=256,
+#                  prompt_embed_dim=768,
+#                  common_dim=256,
+#                  num_heads=8,
+#                  num_layers=4,
+#                  target_mask_size=(512, 512)):
+#         super().__init__()
+#         self.common_dim = common_dim
+#         self.target_mask_size = target_mask_size
+
+#         # Project image and prompt into shared token space
+#         self.image_proj = nn.Sequential(
+#             nn.Conv2d(image_embed_dim, common_dim, kernel_size=1),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(common_dim, common_dim, kernel_size=1),
+#         )
         
-        print("Prompt proj before:",torch.mean(prompt_proj, dim=1))
-        print("=======================")
-        image_tokens = self.ln1(image_tokens)
-        prompt_proj_norm = self.ln2(prompt_proj)
-        # prompt_proj_norm = torch.clamp(prompt_proj, -1e4, 1e4)
-        print("=============")
-        print("Mean image token:",torch.mean(image_tokens, dim=1))
-        print("Mean image token type:",image_tokens.dtype)
-        print("=============")
-        print("Mean prompt token:",torch.mean(prompt_proj_norm, dim=1))
-        print("Mean prompt token type:",prompt_proj_norm.dtype)
-        decoded_tokens = self.decoder(tgt=image_tokens, memory=prompt_proj_norm)
-        print("Mean decoded token:",torch.mean(decoded_tokens, dim=1))
-        print("decoded_tokens type:",decoded_tokens.dtype)
-        mask_logits = self.mask_head(decoded_tokens)  # (B, H*W, 1)
-        coarse_mask = mask_logits.transpose(1, 2).view(B, 1, H, W)
-        refined_mask = F.interpolate(coarse_mask, scale_factor=8, mode='bilinear')
-        return refined_mask
+#         self.prompt_proj = nn.Sequential(
+#             nn.Linear(prompt_embed_dim, common_dim),
+#             nn.ReLU(inplace=True),
+#             nn.Linear(common_dim, common_dim)
+#         )
+#         # Transformer layers (no mask token)
+#         decoder_layer = nn.TransformerDecoderLayer(
+#             d_model=common_dim,
+#             nhead=num_heads,
+#             dim_feedforward=512,
+#             dropout=0.1,
+#             activation='relu',
+#             batch_first=True
+#         )
+#         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+#         self.ln1 = nn.LayerNorm(common_dim)
+#         self.ln2 = nn.LayerNorm(common_dim)
+#         # self.cross_attn = nn.MultiheadAttention(embed_dim=common_dim, num_heads=num_heads, batch_first=True)
+
+#         # Predict coarse mask from image tokens
+#         self.mask_head = nn.Sequential(
+#             nn.Linear(common_dim, common_dim),
+#             nn.ReLU(inplace=True),
+#             nn.Linear(common_dim, 1)
+#         )
+
+#         # Refinement: upsample 64 → 128 → 256 → 512
+#         # self.mask_refiner = nn.Sequential(
+#         #     nn.ConvTranspose2d(1, 64, kernel_size=4, stride=2, padding=1),  # 128
+#         #     nn.ReLU(inplace=True),
+#         #     nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # 256
+#         #     nn.ReLU(inplace=True),
+#         #     nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # 512
+#         #     nn.ReLU(inplace=True),
+#         #     nn.Conv2d(16, 1, kernel_size=3, padding=1)
+#         # )
+#         self.batch_norm = nn.BatchNorm2d(image_embed_dim)
+#     def forward(self, image_embedding, prompt_features):
+#         B, C, H, W = image_embedding.shape
+#         image_embedding = image_embedding.to(torch.float32)  
+#         prompt_features = prompt_features.to(torch.float32)  
+#         # prompt_features = F.normalize(prompt_features, p=2, dim=-1)  # Normalize prompt features
+#         # print(prompt_features.shape)
+#         # print(normalized_image_embedding)
+#         # print("=============")
+#         # print("=============")
+#         image_tokens = self.image_proj(image_embedding)  # (B, common_dim, H, W)
+#         # image_tokens = self.batch_norm(image_tokens)
+#         # image_tokens = nn.ReLU()(image_tokens)
+#         image_tokens = image_tokens.flatten(2).transpose(0, 2, 1)  # (B, H*W, common_dim)
+
+#         prompt_proj = self.prompt_proj(prompt_features)  # (B, T, common_dim)
+#         # prompt_proj = nn.ReLU()(prompt_proj)
+#         # prompt_proj = nn.Tanh()(prompt_proj)
+        
+#         print("Prompt proj before:",torch.mean(prompt_proj, dim=1))
+#         print("=======================")
+#         image_tokens = self.ln1(image_tokens)
+#         prompt_proj_norm = self.ln2(prompt_proj)
+#         # prompt_proj_norm = torch.clamp(prompt_proj, -1e4, 1e4)
+#         print("=============")
+#         print("Mean image token:",torch.mean(image_tokens, dim=1))
+#         print("Mean image token type:",image_tokens.dtype)
+#         print("=============")
+#         print("Mean prompt token:",torch.mean(prompt_proj_norm, dim=1))
+#         print("Mean prompt token type:",prompt_proj_norm.dtype)
+#         decoded_tokens = self.decoder(tgt=image_tokens, memory=prompt_proj_norm)
+#         print("Mean decoded token:",torch.mean(decoded_tokens, dim=1))
+#         print("decoded_tokens type:",decoded_tokens.dtype)
+#         mask_logits = self.mask_head(decoded_tokens)  # (B, H*W, 1)
+#         coarse_mask = mask_logits.transpose(1, 2).view(B, 1, H, W)
+#         refined_mask = F.interpolate(coarse_mask, scale_factor=8, mode='bilinear')
+#         return refined_mask
 
 if __name__ == "__main__":
     image_embedding = torch.randn(1, 256, 64, 64)  # Example image embedding

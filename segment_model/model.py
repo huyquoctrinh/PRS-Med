@@ -44,23 +44,21 @@ class LLMSeg(nn.Module):
             load_4bit,
             device=self.device
         )
+        self.model.eval()
+        for param in self.model.parameters():
+            param.requires_grad = False
 
         # self.model = self.model.to_fp32()
 
-        self.mask_decoder = PromptedMaskDecoder(
-            image_embed_dim=256,
-            prompt_embed_dim=4096,
-            common_dim=256,
-            num_heads=8,
-            num_layers=4,
-            target_mask_size=(1024, 1024)
-        )
+        self.mask_decoder = PromptedMaskDecoder()
 
         self.image_encoder = ImageEncoder(
             model_type="vit_t",
             checkpoint_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/sam_ckpts/tinysam_42.3.pth"
         ).to(self.device)
         self.image_encoder.eval()
+        for param in self.image_encoder.parameters():
+            param.requires_grad = False
 
     def get_model_utils(self):
         return self.tokenizer, self.image_processor, self.context_len, self.model.config
@@ -81,8 +79,11 @@ class LLMSeg(nn.Module):
                 temperature=temperature,
                 max_new_tokens=max_new_tokens,
                 top_p=top_p
-            )['hidden_states'][-1]
-        # print(prompt_embedding)
+            )["hidden_states"][-1]
+        # print("======================")
+        # print("Input ids:", input_ids)
+        # print("Global embedding:", torch.mean(prompt_embedding, dim=1))
+        # print("======================")
         with torch.no_grad():
             image_embedding = self.image_encoder(image_tensor_for_image_enc)
         # print(image_embedding)
@@ -90,7 +91,6 @@ class LLMSeg(nn.Module):
             image_embedding, prompt_embedding
         )
         return final_mask
-
 
 def build_llm_seg(
         model_path, 
