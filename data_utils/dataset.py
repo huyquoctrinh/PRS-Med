@@ -49,9 +49,11 @@ class PromptSegmentDataset(Dataset):
     def __len__(self):
         return len(self.annotation_df)
 
-    def answer_process(self, answer):
+    def answer_process(self, prompt, answer):
+        # Process the answer to get the input_ids
+        input_prompt = "<image> " + prompt + "\n" + answer 
         answer_ids = self.tokenizer.encode(
-            answer, 
+            input_prompt, 
             add_special_tokens=False, 
             return_tensors='pt'
         ).squeeze(0)
@@ -59,7 +61,7 @@ class PromptSegmentDataset(Dataset):
 
     def prompt_process(self, prompt):
         # Process the prompt to get the input_ids and attention_mask
-        prompt_for_vlm = "<image> " + "You are doing the segmentation." + prompt
+        prompt_for_vlm = "<image> " + " You are doing the segmentation." + prompt
         input_ids = tokenizer_image_token(
             prompt_for_vlm, 
             self.tokenizer, 
@@ -104,7 +106,7 @@ class PromptSegmentDataset(Dataset):
         # Process the image and prompt
         image_tensor = self.process_image(image_path)
         input_ids = self.prompt_process(prompt)
-        answers_ids = self.answer_process(answers)    
+        answers_ids = self.answer_process(prompt, answers)    
         return {
             'input_ids': input_ids,
             'image_tensor': image_tensor,
@@ -123,13 +125,19 @@ def collate_fn(batch):
     input_ids = padded_input_ids[:, :MAX_PROMPT_LENGTH]
     input_ids = input_ids.to(torch.int64)
     
+
     padded_answers_ids = nn.utils.rnn.pad_sequence(
         [item['answers_ids'] for item in batch], 
         batch_first=True, 
         padding_value=IGNORE_INDEX
     )
+
     answers_ids = padded_answers_ids[:, :MAX_PROMPT_LENGTH]
     answers_ids = answers_ids.to(torch.int64)
+
+    attention_masks = torch.ones_like(answers_ids)
+    attention_masks[answers_ids == IGNORE_INDEX] = 0
+    attention_masks = attention_masks.to(torch.long)
 
     image_tensor = [item['image_tensor'] for item in batch]
     image_sam_tensor = [item['image_sam'] for item in batch]
@@ -143,7 +151,8 @@ def collate_fn(batch):
         'image_tensor': image_tensor,
         'mask_tensor': mask_tensor,
         'answers_ids': answers_ids,
-        'image_sam': image_sam_tensor
+        'image_sam': image_sam_tensor,
+        "attention_masks": attention_masks
     }
 
 def create_dataloader(

@@ -34,8 +34,10 @@ def evaluate(model, val_loader, device="cuda:0"):
         image_tensor = batch['image_tensor'].to(device)
         mask_tensor = batch['mask_tensor'].to(device)
         image_sam_tensor = batch['image_sam'].to(device)
+        # answer_ids = batch['answers_ids'].to(device)
+        # attention_mask = batch['attention_masks'].to(device)
         with torch.no_grad():
-            outputs = model(input_ids, image_tensor, image_sam_tensor)
+            outputs, _ = model(input_ids, image_tensor, image_sam_tensor)
             # print("outputs:", outputs)
             dice_score_value = dice_score(outputs, mask_tensor)
             # print("Dice score value:", dice_score_value)
@@ -60,36 +62,60 @@ def train(
         model.train()
         model.to(device)
         ep_loss = 0
+        total_llm_loss = 0
+        total_segment_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
-        cnt = 0
+        # cnt = 0
+
         for batch in progress_bar:
+            optimizer.zero_grad()
             # cnt +=1
             # if cnt > 10:
             #     break
-            optimizer.zero_grad()
+            
             input_ids = batch['input_ids'].to(device)
             image_tensor = batch['image_tensor'].to(device)
             mask_tensor = batch['mask_tensor'].to(device)
             image_sam_tensor = batch['image_sam'].to(device)
+            attention_mask = batch['attention_masks'].to(device)
+            answers_ids = batch['answers_ids'].to(device)
+            torch.autograd.set_detect_anomaly(True)
+            
             with autocast(dtype=torch.float16, device_type=device):
-                outputs = model(input_ids, image_tensor, image_sam_tensor)
+                outputs_mask, logit_loss = model(
+                    input_ids = input_ids, 
+                    image_tensor_for_vlm = image_tensor, 
+                    image_tensor_for_image_enc = image_sam_tensor, 
+                    attention_mask = attention_mask,
+                    answers = answers_ids)
             # print("============/=========")
             # print("outputs:", outputs)
-            loss = structure_loss(outputs, mask_tensor)
+            segment_loss = structure_loss(outputs_mask, mask_tensor)
+            loss = logit_loss + segment_loss
+            # print("llm_loss:", logit_loss, "segment_loss:", segment_loss)
             # print("======================")
             # print("mask_tensor:", mask_tensor)
             # print("loss:", loss)
         # print("loss:", loss.item())
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    if torch.isnan(param.grad).any():
+                        print(f"❗ NaN in gradient of {name}")
+                        break 
+            optimizer.step()  
+                    
             ep_loss += loss.item()
             avg_loss = ep_loss / (progress_bar.n + 1)
-            progress_bar.set_postfix(loss=avg_loss)
+            total_llm_loss += logit_loss.item()
+            total_segment_loss += segment_loss.item()
+            avg_llm_loss = total_llm_loss / (progress_bar.n + 1)
+            avg_segment_loss = total_segment_loss / (progress_bar.n + 1)
+            progress_bar.set_postfix(loss=avg_loss, llm_loss=avg_llm_loss, segment_loss=avg_segment_loss)
             # print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
             # break
-        # break
-        # model.eval()
+        model.eval()
         ep_loss /= len(dataloader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {ep_loss}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Loss: {ep_loss}")
@@ -99,6 +125,8 @@ def train(
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         model.save_model(f"weights/llm_seg_{epoch+1}")
         # break
+
+# torch.set_default_device("cuda")
 device = "cuda:0"
 model, tokenizer, image_processor, config = build_llm_seg(
     model_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/llava-med-v1.5-mistral-7b",
@@ -123,7 +151,7 @@ model.to(device)
 optimizer = torch.optim.AdamW(
     model.parameters(),
     lr=1e-4,
-    weight_decay=0.01
+    weight_decay=1e-5
 )
 
 train_params = count_train_parameters(model)
@@ -136,4 +164,4 @@ train(
     device=device
 )
 
-# model.load_model("weights/llm_seg_1")
+model.load_model("weights/llm_seg_1")

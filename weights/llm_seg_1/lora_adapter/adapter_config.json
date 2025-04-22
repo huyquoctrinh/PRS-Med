@@ -20,10 +20,11 @@
   "rank_pattern": {},
   "revision": null,
   "target_modules": [
+    "q_proj",
     "v_proj",
-    "q_proj"
+    "k_proj"
   ],
-  "task_type": "SEQ_2_SEQ_LM",
+  "task_type": "CAUSAL_LM",
   "use_dora": false,
   "use_rslora": false
 }

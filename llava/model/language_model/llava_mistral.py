@@ -53,6 +53,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
         images: Optional[torch.FloatTensor] = None,
         image_sizes: Optional[List[List[int]]] = None,
         return_dict: Optional[bool] = None,
+        # decoder_input_ids = None,
         cache_position=None
     ) -> Union[Tuple, CausalLMOutputWithPast]:
 
@@ -81,7 +82,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
             labels=labels,
-            use_cache=use_cache,
+            use_cache=False,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict
@@ -90,7 +91,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
     @torch.no_grad()
     def extract_last_hidden_state(
         self,
-        inputs: Optional[torch.Tensor] = None,
+        input_ids: Optional[torch.Tensor] = None,
         images: Optional[torch.Tensor] = None,
         image_sizes: Optional[torch.Tensor] = None,
         use_cache: Optional[bool] = None,
@@ -112,7 +113,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
                 inputs_embeds,
                 labels
             ) = self.prepare_inputs_labels_for_multimodal(
-                inputs,
+                input_ids,
                 position_ids,
                 attention_mask,
                 None,
@@ -122,7 +123,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             )
             # print("Image is not none")
         else:
-            inputs_embeds = self.get_model().embed_tokens(inputs)
+            inputs_embeds = self.get_model().embed_tokens(input_ids)
 
         return super().forward(
             input_ids=input_ids,
@@ -131,7 +132,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
             labels=labels,
-            use_cache=use_cache,
+            use_cache=False,
             output_attentions=output_attentions,
             output_hidden_states=True,
             return_dict=True

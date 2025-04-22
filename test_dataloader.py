@@ -24,11 +24,12 @@ dataloader = create_dataloader(
     mode="train"
 )
 
-for batch in dataloader:
+for batch in dataloader["train"]:
     # print(batch)
-    print(batch['input_ids'].shape)
     print(batch['input_ids'])
+    print(batch['input_ids'].shape)
     print(batch['image_tensor'].shape)
+    print(batch['attention_masks'].shape)
     print(batch['mask_tensor'].shape)
     print(batch['answers_ids'].shape)
     print("====================")

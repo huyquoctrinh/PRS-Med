@@ -41,11 +41,12 @@ if __name__ == "__main__":
         model_base=None,
         load_8bit=False,
         load_4bit=False,
-        device="cpu"
+        device="cuda:0"
     )
 
     # print(tokenizer.IGNORE_INDEX)
     print(tokenizer.pad_token_id)
+    print(tokenizer.IMAGE_TOKEN_ID)
 
     # image = load_image("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/lung_CT/test_images/ID00010637202177584971671_25.jpg")
     # prompt = "There is a nodule in the lung <image>. What is the size of the nodule?"
