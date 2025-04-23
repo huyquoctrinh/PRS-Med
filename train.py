@@ -55,7 +55,11 @@ def train(
     num_epochs=10,
     device="cuda:0"
 ):
-    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=10,
+        eta_min=1e-6
+    )
     dataloader = full_loader["train"]
     val_dataloader = full_loader["val"]
     for epoch in range(num_epochs):
@@ -69,6 +73,8 @@ def train(
 
         for batch in progress_bar:
             optimizer.zero_grad()
+            
+                # logging.info(str(progress_bar))
             # cnt +=1
             # if cnt > 10:
             #     break
@@ -112,9 +118,12 @@ def train(
             total_segment_loss += segment_loss.item()
             avg_llm_loss = total_llm_loss / (progress_bar.n + 1)
             avg_segment_loss = total_segment_loss / (progress_bar.n + 1)
+            if progress_bar.n % 1000 == 0:
+                logging.info(f"Epoch [{epoch+1}/{num_epochs}], Step [{progress_bar.n}], Loss: {avg_loss}, LLM Loss: {avg_llm_loss}, Segment Loss: {avg_segment_loss}")
             progress_bar.set_postfix(loss=avg_loss, llm_loss=avg_llm_loss, segment_loss=avg_segment_loss)
             # print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
             # break
+        scheduler.step()
         model.eval()
         ep_loss /= len(dataloader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {ep_loss}")
@@ -123,7 +132,7 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-        model.save_model(f"weights/llm_seg_{epoch+1}")
+        model.save_model(f"weights_1/llm_seg_{epoch+1}")
         # break
 
 # torch.set_default_device("cuda")
@@ -142,7 +151,7 @@ dataloader = create_dataloader(
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
-    batch_size=4,
+    batch_size=8,
     mode="train"
 )
 

@@ -51,17 +51,20 @@ class PromptSegmentDataset(Dataset):
 
     def answer_process(self, prompt, answer):
         # Process the answer to get the input_ids
-        input_prompt = "<image> " + prompt + "\n" + answer 
-        answer_ids = self.tokenizer.encode(
+        input_prompt = "<image>\n" + "### User: \nYou are doing the segmentation for the tumour with the condition: " + prompt + " Where is the position of the tumour? \n" + "### Assistant: \n" + answer
+        # print("Input prompt:", input_prompt)
+        answer_ids = tokenizer_image_token(
             input_prompt, 
-            add_special_tokens=False, 
+            self.tokenizer, 
+            self.IMAGE_TOKEN_INDEX, 
             return_tensors='pt'
-        ).squeeze(0)
+        )
+        # print(answer_ids)
         return answer_ids
 
     def prompt_process(self, prompt):
         # Process the prompt to get the input_ids and attention_mask
-        prompt_for_vlm = "<image> " + " You are doing the segmentation." + prompt
+        prompt_for_vlm = "<image> " + "### User: You are doing the segmentation for the tumour with the condition: " + prompt
         input_ids = tokenizer_image_token(
             prompt_for_vlm, 
             self.tokenizer, 
@@ -183,7 +186,7 @@ def create_dataloader(
         batch_size=batch_size, 
         shuffle=True, 
         collate_fn=collate_fn,
-        num_workers=4,
+        num_workers=16,
         pin_memory=True
     )
 

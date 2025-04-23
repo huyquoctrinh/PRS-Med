@@ -94,13 +94,50 @@ class LLMSeg(nn.Module):
 
     def load_model(self, load_path):
         print("Loading model from:", load_path)
-        self.model = PeftModel.from_pretrained(self.base_model, load_path + "/lora_adapter")
-        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter")
+        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter/")
         self.mask_decoder.load_state_dict(torch.load(load_path + "/mask_decoder.pth"))
+        self.model = PeftModel.from_pretrained(self.model, load_path + "/lora_adapter/")
+        self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+        # self.model.generation_config.IMAGE_TOKEN_ID = self.tokenizer.IMAGE_TOKEN_ID
         self.mask_decoder.to(self.device)
         self.mask_decoder.eval()
         self.model = self.model.merge_and_unload()
         self.model.eval()
+        return self.tokenizer
+    
+    def generate(
+        self,
+        input_ids,
+        image_tensor_for_vlm,
+        image_tensor_for_image_enc,
+        attention_mask = None,
+        temperature=0.0001,
+        max_new_tokens=512,
+        top_p=0.95
+    ):
+        with torch.no_grad():
+            output_ids = self.model.generate(
+                inputs = input_ids,
+                images = image_tensor_for_vlm,
+                do_sample=True if temperature > 0 else False,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
+                top_p=top_p
+            )
+
+            image_embedding = self.image_encoder(image_tensor_for_image_enc)
+            prompt_embedding = self.model.extract_last_hidden_state(
+                input_ids = input_ids,
+                images = image_tensor_for_vlm,
+                do_sample=True if temperature > 0 else False,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
+                top_p=top_p
+            )["hidden_states"][-1]
+            final_mask = self.mask_decoder(
+                image_embedding, prompt_embedding
+            )
+        return final_mask, output_ids
 
     def forward(self,
         input_ids,

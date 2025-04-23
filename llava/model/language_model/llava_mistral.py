@@ -82,7 +82,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
             labels=labels,
-            use_cache=False,
+            use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict
@@ -177,6 +177,54 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             inputs_embeds=inputs_embeds,
             **kwargs
         )
+    
+    # @torch.no_grad()
+    # def generate(
+    #     self,
+    #     inputs_ids: Optional[torch.Tensor] = None,
+    #     images: Optional[torch.Tensor] = None,
+    #     image_sizes: Optional[torch.Tensor] = None,
+    #     **kwargs,
+    # ) -> Union[GenerateOutput, torch.LongTensor]:
+    #     position_ids = kwargs.pop("position_ids", None)
+    #     attention_mask = kwargs.pop("attention_mask", None)
+    #     if "inputs_embeds" in kwargs:
+    #         raise NotImplementedError("`inputs_embeds` is not supported")
+    #     # print(images.shape)
+    #     # attention_mask = torch.ones((inputs_ids.shape[0], inputs_ids.shape[1]), device=inputs_ids.device)
+    #     # attention_mask = attention_mask.to(torch.int64)
+    #     if images is not None:
+    #         (
+    #             inputs_ids,
+    #             position_ids,
+    #             attention_mask,
+    #             _,
+    #             inputs_embeds,
+    #             _
+    #         ) = self.prepare_inputs_labels_for_multimodal(
+    #             inputs_ids,
+    #             position_ids,
+    #             attention_mask,
+    #             None,
+    #             None,
+    #             images,
+    #             image_sizes=image_sizes
+    #         )
+    #     else:
+    #         inputs_embeds = self.get_model().embed_tokens(inputs_ids)
+        
+    #     # position_ids = torch.arange(0, inputs_ids.shape[1], dtype=torch.long, device=inputs_ids.device)
+    #     # if position_ids is None:
+    #     #     position_ids = torch.arange(0, inputs_embeds.shape[1], dtype=torch.long).unsqueeze(0).to(inputs_embeds.device)
+    #     print(position_ids)
+    #     # print(super().config.max_position_embeddings)
+    #     return super().generate(
+    #         position_ids=position_ids,
+    #         attention_mask=attention_mask,
+    #         inputs_embeds=inputs_embeds,
+    #         use_cache=True,
+    #         **kwargs
+    #     )
 
     def prepare_inputs_for_generation(self, input_ids, past_key_values=None,
                                       inputs_embeds=None, **kwargs):
