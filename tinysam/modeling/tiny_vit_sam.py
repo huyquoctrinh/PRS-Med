@@ -599,6 +599,8 @@ class TinyViT(nn.Module):
 
     def forward_features(self, x):
         # x: (N, C, H, W)
+        N, C_old, H, W = x.shape
+        # list_output = []
         x = self.patch_embed(x)
 
         x = self.layers[0](x)
@@ -607,6 +609,11 @@ class TinyViT(nn.Module):
         for i in range(start_i, len(self.layers)):
             layer = self.layers[i]
             x = layer(x)
+            # B_tmp, _, C_tmp = x.size()
+            # x_permute = x.view(B_tmp,  64, 64, C_tmp).permute(0, 3, 1, 2)
+            # x_permute = x_permute.contiguous()
+            # list_output.append(x_permute)
+        
         B,_,C=x.size()
         x = x.view(B, 64, 64, C)
         x=x.permute(0, 3, 1, 2)

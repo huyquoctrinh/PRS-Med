@@ -71,6 +71,11 @@ def train(
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
         # cnt = 0
 
+        # if epoch > 1:
+        #     model.model.eval()
+        #     for param in model.model.parameters():
+        #         param.requires_grad = False
+
         for batch in progress_bar:
             optimizer.zero_grad()
             
@@ -97,21 +102,15 @@ def train(
             # print("============/=========")
             # print("outputs:", outputs)
             segment_loss = structure_loss(outputs_mask, mask_tensor)
-            loss = logit_loss + segment_loss
-            # print("llm_loss:", logit_loss, "segment_loss:", segment_loss)
-            # print("======================")
-            # print("mask_tensor:", mask_tensor)
-            # print("loss:", loss)
-        # print("loss:", loss.item())
+            
+            # if epoch < 2:
+            # print(segment_loss, logit_loss)
+            loss = segment_loss + logit_loss
+
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    if torch.isnan(param.grad).any():
-                        print(f"❗ NaN in gradient of {name}")
-                        break 
             optimizer.step()  
-                    
+
             ep_loss += loss.item()
             avg_loss = ep_loss / (progress_bar.n + 1)
             total_llm_loss += logit_loss.item()
@@ -132,7 +131,7 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-        model.save_model(f"weights_1/llm_seg_{epoch+1}")
+        model.save_model(f"weights1/llm_seg_{epoch+1}")
         # break
 
 # torch.set_default_device("cuda")
@@ -147,7 +146,7 @@ model, tokenizer, image_processor, config = build_llm_seg(
 
 dataloader = create_dataloader(
     data_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data",
-    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation",
+    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1",
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
@@ -159,7 +158,7 @@ model.to(device)
 
 optimizer = torch.optim.AdamW(
     model.parameters(),
-    lr=1e-4,
+    lr = 1e-4,
     weight_decay=1e-5
 )
 
@@ -173,4 +172,4 @@ train(
     device=device
 )
 
-model.load_model("weights/llm_seg_1")
+model.load_model("weights_11/llm_seg_1")

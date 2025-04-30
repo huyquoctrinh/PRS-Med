@@ -37,7 +37,7 @@ class PromptSegmentDataset(Dataset):
         self.data_config = data_config
         
         self.mask_transform = transforms.Compose([
-            transforms.Resize((self.trainsize, self.trainsize)),
+            transforms.Resize((1024, 1024)),
             transforms.ToTensor(),
         ])
 
@@ -49,9 +49,9 @@ class PromptSegmentDataset(Dataset):
     def __len__(self):
         return len(self.annotation_df)
 
-    def answer_process(self, prompt, answer):
+    def answer_process(self, question, prompt, answer):
         # Process the answer to get the input_ids
-        input_prompt = "<image>\n" + "### User: \nYou are doing the segmentation for the tumour with the condition: " + prompt + " Where is the position of the tumour? \n" + "### Assistant: \n" + answer
+        input_prompt = "<image>\n" + f"### User: {question} \n" + "### Assistant: \n" + answer + " " + prompt
         # print("Input prompt:", input_prompt)
         answer_ids = tokenizer_image_token(
             input_prompt, 
@@ -64,7 +64,8 @@ class PromptSegmentDataset(Dataset):
 
     def prompt_process(self, prompt):
         # Process the prompt to get the input_ids and attention_mask
-        prompt_for_vlm = "<image> " + "### User: You are doing the segmentation for the tumour with the condition: " + prompt
+        # prompt_for_vlm = "<image> " + "### User: You are doing the segmentation for the tumour with the condition: " + prompt + " Where is the position of the tumour? \n"
+        prompt_for_vlm = "<image> \n" + prompt 
         input_ids = tokenizer_image_token(
             prompt_for_vlm, 
             self.tokenizer, 
@@ -103,13 +104,14 @@ class PromptSegmentDataset(Dataset):
         mask_path = mask_path.replace("\\", "/")
         image_path = mask_path.replace("train_masks", "train_images")
         prompt = self.annotation_df.iloc[idx]['description']
+        question = self.annotation_df.iloc[idx]['question']
         answers = self.annotation_df.iloc[idx]['position']
         mask_tensor = self.process_mask(mask_path)
         image_sam_tensor = self.process_sam_image(image_path)
         # Process the image and prompt
         image_tensor = self.process_image(image_path)
-        input_ids = self.prompt_process(prompt)
-        answers_ids = self.answer_process(prompt, answers)    
+        input_ids = self.prompt_process(question)
+        answers_ids = self.answer_process(question, prompt, answers)    
         return {
             'input_ids': input_ids,
             'image_tensor': image_tensor,
