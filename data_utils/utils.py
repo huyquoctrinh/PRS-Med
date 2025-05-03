@@ -6,6 +6,7 @@ import random
 from PIL import Image
 import requests
 from io import BytesIO
+from sklearn.utils import shuffle
 
 def load_annotation(annotation_path):
     list_df_path = os.listdir(annotation_path)
@@ -18,7 +19,8 @@ def load_annotation(annotation_path):
         list_df.append(df)
     df = pd.concat(list_df, ignore_index=True)
     df = df.dropna()
-    df = df.sample(frac=1, random_state=42)
+    # df = df.sample(frac=1, random_state=42)
+    df = shuffle(df)
     df = df.reset_index(drop=True)
     train_df = df[df['split'] == 'train']
     test_df = df[df['split'] == 'test']

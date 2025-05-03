@@ -27,10 +27,11 @@ class PromptSegmentDataset(Dataset):
         self.annotation_df = None
         self.train_df, self.test_df = load_annotation(annotation_path)
         self.trainsize = trainsize
-        if mode == "train":
-            self.annotation_df = self.train_df
-        elif mode == "test":
-            self.annotation_df = self.test_df
+        self.annotation_df = self.train_df
+        # if mode == "train":
+        #     self.annotation_df = self.train_df
+        # elif mode == "test":
+        #     self.annotation_df = self.test_df
 
         self.IMAGE_TOKEN_INDEX = -200
         self.image_processor = image_processor
@@ -44,6 +45,9 @@ class PromptSegmentDataset(Dataset):
         self.image_sam_transform = transforms.Compose([
             transforms.Resize((1024, 1024)),
             transforms.ToTensor(),
+            transforms.Normalize(
+                [0.485, 0.456, 0.406],
+                [0.229, 0.224, 0.225])
         ])
         
     def __len__(self):
@@ -102,7 +106,9 @@ class PromptSegmentDataset(Dataset):
         # Get the image path and prompt from the dataframe
         mask_path = os.path.join(self.data_path, self.annotation_df.iloc[idx]['image_path'])
         mask_path = mask_path.replace("\\", "/")
-        image_path = mask_path.replace("train_masks", "train_images")
+        image_path = mask_path.replace("train_masks", "train_images").replace("_Segmentation", "")
+        if "ISIC" in image_path:
+            image_path = image_path.replace(".png", ".jpg")
         prompt = self.annotation_df.iloc[idx]['description']
         question = self.annotation_df.iloc[idx]['question']
         answers = self.annotation_df.iloc[idx]['position']
@@ -180,7 +186,7 @@ def create_dataloader(
 
     train_dataset, val_dataset = torch.utils.data.random_split(
         dataset, 
-        [int(len(dataset) * 0.8), len(dataset) - int(len(dataset) * 0.8)]
+        [int(len(dataset) * 0.9), len(dataset) - int(len(dataset) * 0.9)]
     )
     
     train_dataloader = DataLoader(

@@ -1,0 +1,6 @@
+Eval:
+    gt_root: "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/"
+    pred_root: "/home/mamba/ML_project/Testing/Huy/llm_seg/results/lm_seg_test_3_norm_7/masks"
+    result_path: "results_1"
+    datasets: ['brain_tumors_ct_scan', 'breast_tumors_ct_scan', 'lung_CT', 'lung_Xray']
+    metrics: ['meanDic', 'meanIoU', 'wFm', 'Sm', 'meanEm', 'mae', 'maxEm', 'maxDic', 'maxIoU', 'meanSen', 'maxSen', 'meanSpe', 'maxSpe']

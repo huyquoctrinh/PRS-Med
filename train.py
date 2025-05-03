@@ -8,9 +8,11 @@ from llava.mm_utils import get_model_name_from_path
 from llava.utils import disable_torch_init
 from llava.model.builder import load_pretrained_model
 from data_utils.dataset import create_dataloader
-from loss import structure_loss, dice_score
+from loss import structure_loss, dice_score, BceDiceLoss
 from tqdm import tqdm
 import logging
+import torch.nn.functional as F
+from optimizers import Adam16
 
 logging.basicConfig(
     filename='logs/training.log',
@@ -57,9 +59,12 @@ def train(
 ):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=10,
+        T_max=15,
         eta_min=1e-6
     )
+
+    bce_dice_loss = BceDiceLoss()
+
     dataloader = full_loader["train"]
     val_dataloader = full_loader["val"]
     for epoch in range(num_epochs):
@@ -69,7 +74,7 @@ def train(
         total_llm_loss = 0
         total_segment_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
-        # cnt = 0
+        cnt = 0
 
         # if epoch > 1:
         #     model.model.eval()
@@ -82,7 +87,7 @@ def train(
                 # logging.info(str(progress_bar))
             # cnt +=1
             # if cnt > 10:
-            #     break
+                # break
             
             input_ids = batch['input_ids'].to(device)
             image_tensor = batch['image_tensor'].to(device)
@@ -101,6 +106,8 @@ def train(
                     answers = answers_ids)
             # print("============/=========")
             # print("outputs:", outputs)
+            outputs_mask = F.interpolate(outputs_mask, size=(1024, 1024), mode='bilinear', align_corners=False)
+
             segment_loss = structure_loss(outputs_mask, mask_tensor)
             
             # if epoch < 2:
@@ -108,7 +115,7 @@ def train(
             loss = segment_loss + logit_loss
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
             optimizer.step()  
 
             ep_loss += loss.item()
@@ -131,7 +138,7 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-        model.save_model(f"weights1/llm_seg_{epoch+1}")
+        model.save_model(f"/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_{epoch+1}")
         # break
 
 # torch.set_default_device("cuda")
@@ -146,7 +153,7 @@ model, tokenizer, image_processor, config = build_llm_seg(
 
 dataloader = create_dataloader(
     data_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data",
-    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1",
+    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2",
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
@@ -159,8 +166,24 @@ model.to(device)
 optimizer = torch.optim.AdamW(
     model.parameters(),
     lr = 1e-4,
-    weight_decay=1e-5
+    weight_decay=1e-5,
+    eps = 1e-6
 )
+
+# optimizer = torch.optim.Adam(
+#     model.parameters(),
+#     lr=1e-4,
+#     betas=(0.9, 0.999),
+#     eps=1e-8,
+#     weight_decay=1e-5
+# )
+# optimizer = Adam16(
+#     model.parameters(),
+#     lr=1e-4,
+#     betas=(0.9, 0.999),
+#     eps=1e-8,
+#     weight_decay=1e-5
+# )
 
 train_params = count_train_parameters(model)
 print("Trainable parameters:", train_params)
@@ -168,8 +191,8 @@ train(
     model=model,
     full_loader=dataloader,
     optimizer=optimizer,
-    num_epochs=10,
+    num_epochs=15,
     device=device
 )
 
-model.load_model("weights_11/llm_seg_1")
+model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_10")

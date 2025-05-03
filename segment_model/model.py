@@ -7,7 +7,7 @@ from llava.mm_utils import process_images, tokenizer_image_token, get_model_name
 import torch.nn as nn
 from tinysam import sam_model_registry, SamHierarchicalMaskGenerator
 import torch 
-from segment_model.mask_decoder import PromptedMaskDecoder
+from segment_model.mask_decoder_v5 import PromptedMaskDecoder
 import peft
 from peft import LoraConfig, TaskType, get_peft_model
 from peft import PeftModel

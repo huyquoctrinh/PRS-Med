@@ -1,0 +1,1 @@
+python eval.py --config eval.yaml --verbose
