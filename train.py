@@ -73,6 +73,7 @@ def train(
         ep_loss = 0
         total_llm_loss = 0
         total_segment_loss = 0
+        total_cls_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
         cnt = 0
 
@@ -95,10 +96,11 @@ def train(
             image_sam_tensor = batch['image_sam'].to(device)
             attention_mask = batch['attention_masks'].to(device)
             answers_ids = batch['answers_ids'].to(device)
+            labels = batch['label'].to(device)
             torch.autograd.set_detect_anomaly(True)
             
             with autocast(dtype=torch.float16, device_type=device):
-                outputs_mask, logit_loss = model(
+                outputs_mask, output_cls, logit_loss = model(
                     input_ids = input_ids, 
                     image_tensor_for_vlm = image_tensor, 
                     image_tensor_for_image_enc = image_sam_tensor, 
@@ -107,12 +109,13 @@ def train(
             # print("============/=========")
             # print("outputs:", outputs)
             outputs_mask = F.interpolate(outputs_mask, size=(1024, 1024), mode='bilinear', align_corners=False)
-
+            cls_loss = nn.CrossEntropyLoss()(output_cls, labels)
+            # print("cls_loss:", cls_loss.item())
             segment_loss = structure_loss(outputs_mask, mask_tensor)
             
             # if epoch < 2:
             # print(segment_loss, logit_loss)
-            loss = segment_loss + logit_loss
+            loss = segment_loss + logit_loss + cls_loss
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
@@ -122,11 +125,13 @@ def train(
             avg_loss = ep_loss / (progress_bar.n + 1)
             total_llm_loss += logit_loss.item()
             total_segment_loss += segment_loss.item()
+            total_cls_loss += cls_loss.item()
             avg_llm_loss = total_llm_loss / (progress_bar.n + 1)
             avg_segment_loss = total_segment_loss / (progress_bar.n + 1)
+            avg_cls_loss = total_cls_loss / (progress_bar.n + 1)
             if progress_bar.n % 1000 == 0:
-                logging.info(f"Epoch [{epoch+1}/{num_epochs}], Step [{progress_bar.n}], Loss: {avg_loss}, LLM Loss: {avg_llm_loss}, Segment Loss: {avg_segment_loss}")
-            progress_bar.set_postfix(loss=avg_loss, llm_loss=avg_llm_loss, segment_loss=avg_segment_loss)
+                logging.info(f"Epoch [{epoch+1}/{num_epochs}], Step [{progress_bar.n}], Loss: {avg_loss}, LLM Loss: {avg_llm_loss}, Segment Loss: {avg_segment_loss}, Cls Loss: {avg_cls_loss}")
+            progress_bar.set_postfix(loss=avg_loss, llm_loss=avg_llm_loss, segment_loss=avg_segment_loss, cls_loss=avg_cls_loss)
             # print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
             # break
         scheduler.step()

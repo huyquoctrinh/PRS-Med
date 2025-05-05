@@ -270,24 +270,24 @@ class PromptedMaskDecoder(nn.Module):
             if isinstance(layer, nn.Linear):
                 nn.init.xavier_uniform_(layer.weight)
                 if layer.bias is not None:
-                    nn.init.zeros_(layer.bias)
+                    nn.init.ones_(layer.bias)
             elif isinstance(layer, nn.LayerNorm):
                 nn.init.ones_(layer.weight)
-                nn.init.zeros_(layer.bias)
+                nn.init.ones_(layer.bias)
 
         # cross-attention: image tokens attend to prompt
         self.attn = nn.MultiheadAttention(embed_dim=image_dim, num_heads=8, batch_first=True)
         self.norm1 = nn.LayerNorm(image_dim, eps=1e-5)
         nn.init.xavier_uniform_(self.attn.in_proj_weight)
         nn.init.xavier_uniform_(self.attn.out_proj.weight)
-        nn.init.zeros_(self.attn.in_proj_bias)
-        nn.init.zeros_(self.attn.out_proj.bias)
+        nn.init.ones_(self.attn.in_proj_bias)
+        nn.init.ones_(self.attn.out_proj.bias)
 
         # self.adapter = Adapter(image_dim, image_dim, image_dim)
         self.ffn = FFN(image_dim, image_dim)
 
         torch.nn.init.xavier_uniform_(self.ffn.fc1.weight)
-        torch.nn.init.zeros_(self.ffn.fc1.bias)
+        torch.nn.init.ones_(self.ffn.fc1.bias)
 
         # self.decoder = nn.Sequential(
         #     BasicBlock(image_dim, image_dim // 2),
@@ -303,12 +303,12 @@ class PromptedMaskDecoder(nn.Module):
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=256, nhead=16, batch_first=True, activation = "relu", dim_feedforward=512)
         torch.nn.init.xavier_uniform_(self.encoder_layer.self_attn.in_proj_weight)
         torch.nn.init.xavier_uniform_(self.encoder_layer.self_attn.out_proj.weight)
-        torch.nn.init.zeros_(self.encoder_layer.self_attn.in_proj_bias)
-        torch.nn.init.zeros_(self.encoder_layer.self_attn.out_proj.bias)
+        torch.nn.init.ones_(self.encoder_layer.self_attn.in_proj_bias)
+        torch.nn.init.ones_(self.encoder_layer.self_attn.out_proj.bias)
         torch.nn.init.xavier_uniform_(self.encoder_layer.linear1.weight)
-        torch.nn.init.zeros_(self.encoder_layer.linear1.bias)
+        torch.nn.init.ones_(self.encoder_layer.linear1.bias)
         torch.nn.init.xavier_uniform_(self.encoder_layer.linear2.weight)
-        torch.nn.init.zeros_(self.encoder_layer.linear2.bias)
+        torch.nn.init.ones_(self.encoder_layer.linear2.bias)
 
         self.mask_generation = nn.Sequential(
             BasicBlock(image_dim, image_dim),

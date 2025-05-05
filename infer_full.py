@@ -19,7 +19,7 @@ def load_model():
         device="cuda:2"
     )
     # model = model.to("cpu")
-    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/weights3_norm/llm_seg_11")
+    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_12")
     model = model.to("cuda:2")
     return model, tokenizer, image_processor, config
 
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     model, tokenizer, image_processor, config = load_model()
     # image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/brain_tumors_ct_scan/train_images/2.png"
     # prompt = " CT scan demonstrating a dural-based mass along the convexity suggestive of meningioma."
-    results_path = "results/lm_seg_test_3_norm_11"
+    results_path = "results/lm_seg_test_3_full_2_ckpt_12"
     
     mask_path = results_path + "/masks/"
     if not os.path.exists(results_path):
@@ -141,12 +141,7 @@ if __name__ == "__main__":
         os.makedirs(mask_path)
     # df_res = pd.DataFrame(columns=["image_path", "mask_path", "prompt", "results"])
 
-    list_csv_path = [
-        "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/lung_Xray.csv",
-        "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/breast_tumors_ct_scan.csv",
-        "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/brain_tumors_ct_scan.csv",
-        "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/lung_CT.csv"
-    ]
+    list_csv_path = ["/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/" + df_dir for df_dir in os.listdir("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2")]
     # df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/lung_Xray.csv")
     # len(df)
     # cnt =0 

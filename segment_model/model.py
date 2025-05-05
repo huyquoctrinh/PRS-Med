@@ -86,6 +86,14 @@ class LLMSeg(nn.Module):
         #     checkpoint_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/sam_ckpts/sam_vit_b_01ec64.pth"
         # )
         self.image_encoder.train()
+        self.cls = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Linear(256, 7)
+        )
+        torch.nn.init.xavier_uniform_(self.cls[2].weight)
+        torch.nn.init.ones_(self.cls[2].bias)
+
         # for param in self.image_encoder.parameters():
             # param.requires_grad = False
 
@@ -97,6 +105,7 @@ class LLMSeg(nn.Module):
         self.tokenizer.save_pretrained(save_path + "/lora_adapter")
         torch.save(self.image_encoder.state_dict(), save_path + "/image_encoder.pth")
         torch.save(self.mask_decoder.state_dict(), save_path + "/mask_decoder.pth")
+        torch.save(self.cls.state_dict(), save_path + "/cls.pth")
 
     def load_model(self, load_path):
         print("Loading model from:", load_path)
@@ -147,6 +156,7 @@ class LLMSeg(nn.Module):
             #     max_new_tokens=max_new_tokens,
             #     top_p=top_p
             # # )["hidden_states"][-1][:shape_embedding, :]
+            
             prompt_embedding = self.base_model.extract_last_hidden_state(
                 input_ids = input_ids_for_seg if input_ids_for_seg is not None else input_ids,
                 images = image_tensor_for_vlm,
@@ -186,7 +196,9 @@ class LLMSeg(nn.Module):
             )["hidden_states"][-1]
 
         image_embedding = self.image_encoder(image_tensor_for_image_enc)
-
+        # print(image_embedding)
+        output_cls = self.cls(image_embedding)
+        # print("Output cls:", output_cls)
         final_mask = self.mask_decoder(
             image_embedding, prompt_embedding
         )
@@ -198,7 +210,7 @@ class LLMSeg(nn.Module):
                 use_cache = False,
                 labels=answers
             ).loss
-            return final_mask, logit_loss
+            return final_mask, output_cls, logit_loss
         else:
             output = self.model(
                 input_ids = input_ids,

@@ -109,6 +109,21 @@ class PromptSegmentDataset(Dataset):
         image_path = mask_path.replace("train_masks", "train_images").replace("_Segmentation", "")
         if "ISIC" in image_path:
             image_path = image_path.replace(".png", ".jpg")
+        if "skin" in image_path:
+            label = 6
+        elif "breast" in image_path:
+            label = 1
+        elif "brain" in image_path:
+            label = 0
+        elif "dental" in image_path:
+            label = 2
+        elif "lung_CT" in image_path:
+            label = 3
+        elif "lung_Xray" in image_path:
+            label = 4
+        else:
+            label = 3
+        
         prompt = self.annotation_df.iloc[idx]['description']
         question = self.annotation_df.iloc[idx]['question']
         answers = self.annotation_df.iloc[idx]['position']
@@ -123,7 +138,8 @@ class PromptSegmentDataset(Dataset):
             'image_tensor': image_tensor,
             'mask_tensor': mask_tensor,
             'answers_ids': answers_ids,
-            "image_sam": image_sam_tensor
+            "image_sam": image_sam_tensor,
+            "label": label
         }
     
 def collate_fn(batch):
@@ -163,7 +179,8 @@ def collate_fn(batch):
         'mask_tensor': mask_tensor,
         'answers_ids': answers_ids,
         'image_sam': image_sam_tensor,
-        "attention_masks": attention_masks
+        "attention_masks": attention_masks,
+        "label": torch.tensor([item['label'] for item in batch])
     }
 
 def create_dataloader(
