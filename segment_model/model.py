@@ -7,11 +7,13 @@ from llava.mm_utils import process_images, tokenizer_image_token, get_model_name
 import torch.nn as nn
 from tinysam import sam_model_registry, SamHierarchicalMaskGenerator
 import torch 
-from segment_model.mask_decoder import PromptedMaskDecoder
+from segment_model.mask_decoder_v5 import PromptedMaskDecoder
 import peft
 from peft import LoraConfig, TaskType, get_peft_model
 from peft import PeftModel
 import math 
+# from segment_anything import sam_model_registry
+
 
 def custom_lora_init(module):
     if hasattr(module, "lora_A"):
@@ -23,12 +25,11 @@ class ImageEncoder(nn.Module):
     def __init__(self, model_type, checkpoint_path):
         super(ImageEncoder, self).__init__()
         self.sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
-        self.sam.eval()
         self.image_encoder = self.sam.image_encoder
 
     def forward(self, inputs):
-        with torch.no_grad():
-            return self.image_encoder(inputs)
+        # with torch.no_grad():
+        return self.image_encoder(inputs)
 
 class LLMSeg(nn.Module):
     def __init__(
@@ -44,11 +45,11 @@ class LLMSeg(nn.Module):
         disable_torch_init()
         self.device = device        
         lora_config = LoraConfig(
-            r=8,
-            lora_alpha=32,
-            lora_dropout=0.1,
+            r=16,
+            lora_alpha=16,
+            lora_dropout=0.05,
             task_type=TaskType.CAUSAL_LM,
-            target_modules=["q_proj", "v_proj", "k_proj"], 
+            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"], 
             inference_mode=False,
         )
         
@@ -79,10 +80,22 @@ class LLMSeg(nn.Module):
         self.image_encoder = ImageEncoder(
             model_type="vit_t",
             checkpoint_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/sam_ckpts/tinysam_42.3.pth"
-        ).to(self.device)
-        self.image_encoder.eval()
-        for param in self.image_encoder.parameters():
-            param.requires_grad = False
+        )
+        # self.image_encoder = ImageEncoder(
+        #     model_type="vit_b",
+        #     checkpoint_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/sam_ckpts/sam_vit_b_01ec64.pth"
+        # )
+        self.image_encoder.train()
+        self.cls = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Linear(256, 7)
+        )
+        torch.nn.init.xavier_uniform_(self.cls[2].weight)
+        torch.nn.init.ones_(self.cls[2].bias)
+
+        # for param in self.image_encoder.parameters():
+            # param.requires_grad = False
 
     def get_model_utils(self):
         return self.tokenizer, self.image_processor, self.context_len, self.base_model.config
@@ -90,18 +103,22 @@ class LLMSeg(nn.Module):
     def save_model(self, save_path):
         self.model.save_pretrained(save_path + "/lora_adapter")
         self.tokenizer.save_pretrained(save_path + "/lora_adapter")
+        torch.save(self.image_encoder.state_dict(), save_path + "/image_encoder.pth")
         torch.save(self.mask_decoder.state_dict(), save_path + "/mask_decoder.pth")
+        torch.save(self.cls.state_dict(), save_path + "/cls.pth")
 
     def load_model(self, load_path):
         print("Loading model from:", load_path)
         self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter/")
         self.mask_decoder.load_state_dict(torch.load(load_path + "/mask_decoder.pth"))
+        self.image_encoder.load_state_dict(torch.load(load_path + "/image_encoder.pth"))
         self.model = PeftModel.from_pretrained(self.model, load_path + "/lora_adapter/")
         self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
         # self.model.generation_config.IMAGE_TOKEN_ID = self.tokenizer.IMAGE_TOKEN_ID
         self.mask_decoder.to(self.device)
         self.mask_decoder.eval()
         self.model = self.model.merge_and_unload()
+        self.image_encoder.eval()
         self.model.eval()
         return self.tokenizer
     
@@ -110,11 +127,15 @@ class LLMSeg(nn.Module):
         input_ids,
         image_tensor_for_vlm,
         image_tensor_for_image_enc,
+        input_ids_for_seg=None,
         attention_mask = None,
         temperature=0.0001,
         max_new_tokens=512,
         top_p=0.95
     ):
+        self.image_encoder.eval()
+        self.model.eval()
+        self.mask_decoder.eval()
         with torch.no_grad():
             output_ids = self.model.generate(
                 inputs = input_ids,
@@ -126,11 +147,21 @@ class LLMSeg(nn.Module):
             )
 
             image_embedding = self.image_encoder(image_tensor_for_image_enc)
-            prompt_embedding = self.model.extract_last_hidden_state(
-                input_ids = input_ids,
+            # shape_embedding = input_ids.shape[-1]
+            # prompt_embedding = self.model.extract_last_hidden_state(
+            #     input_ids = input_ids,
+            #     images = image_tensor_for_vlm,
+            #     do_sample=False,
+            #     temperature=0,
+            #     max_new_tokens=max_new_tokens,
+            #     top_p=top_p
+            # # )["hidden_states"][-1][:shape_embedding, :]
+            
+            prompt_embedding = self.base_model.extract_last_hidden_state(
+                input_ids = input_ids_for_seg if input_ids_for_seg is not None else input_ids,
                 images = image_tensor_for_vlm,
-                do_sample=True if temperature > 0 else False,
-                temperature=temperature,
+                do_sample=False,
+                temperature=0,
                 max_new_tokens=max_new_tokens,
                 top_p=top_p
             )["hidden_states"][-1]
@@ -158,15 +189,16 @@ class LLMSeg(nn.Module):
             prompt_embedding = self.model.extract_last_hidden_state(
                 input_ids = input_ids,
                 images = image_tensor_for_vlm,
-                do_sample=True if temperature > 0 else False,
-                temperature=temperature,
+                do_sample=False,
+                temperature=0,
                 max_new_tokens=max_new_tokens,
                 top_p=top_p
             )["hidden_states"][-1]
 
-        with torch.no_grad():
-            image_embedding = self.image_encoder(image_tensor_for_image_enc)
-
+        image_embedding = self.image_encoder(image_tensor_for_image_enc)
+        # print(image_embedding)
+        output_cls = self.cls(image_embedding)
+        # print("Output cls:", output_cls)
         final_mask = self.mask_decoder(
             image_embedding, prompt_embedding
         )
@@ -178,7 +210,7 @@ class LLMSeg(nn.Module):
                 use_cache = False,
                 labels=answers
             ).loss
-            return final_mask, logit_loss
+            return final_mask, output_cls, logit_loss
         else:
             output = self.model(
                 input_ids = input_ids,

@@ -8,9 +8,11 @@ from llava.mm_utils import get_model_name_from_path
 from llava.utils import disable_torch_init
 from llava.model.builder import load_pretrained_model
 from data_utils.dataset import create_dataloader
-from loss import structure_loss, dice_score
+from loss import structure_loss, dice_score, BceDiceLoss
 from tqdm import tqdm
 import logging
+import torch.nn.functional as F
+from optimizers import Adam16
 
 logging.basicConfig(
     filename='logs/training.log',
@@ -57,9 +59,12 @@ def train(
 ):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=10,
+        T_max=15,
         eta_min=1e-6
     )
+
+    bce_dice_loss = BceDiceLoss()
+
     dataloader = full_loader["train"]
     val_dataloader = full_loader["val"]
     for epoch in range(num_epochs):
@@ -68,8 +73,14 @@ def train(
         ep_loss = 0
         total_llm_loss = 0
         total_segment_loss = 0
+        total_cls_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
-        # cnt = 0
+        cnt = 0
+
+        # if epoch > 1:
+        #     model.model.eval()
+        #     for param in model.model.parameters():
+        #         param.requires_grad = False
 
         for batch in progress_bar:
             optimizer.zero_grad()
@@ -77,7 +88,7 @@ def train(
                 # logging.info(str(progress_bar))
             # cnt +=1
             # if cnt > 10:
-            #     break
+                # break
             
             input_ids = batch['input_ids'].to(device)
             image_tensor = batch['image_tensor'].to(device)
@@ -85,10 +96,11 @@ def train(
             image_sam_tensor = batch['image_sam'].to(device)
             attention_mask = batch['attention_masks'].to(device)
             answers_ids = batch['answers_ids'].to(device)
+            labels = batch['label'].to(device)
             torch.autograd.set_detect_anomaly(True)
             
             with autocast(dtype=torch.float16, device_type=device):
-                outputs_mask, logit_loss = model(
+                outputs_mask, output_cls, logit_loss = model(
                     input_ids = input_ids, 
                     image_tensor_for_vlm = image_tensor, 
                     image_tensor_for_image_enc = image_sam_tensor, 
@@ -96,31 +108,30 @@ def train(
                     answers = answers_ids)
             # print("============/=========")
             # print("outputs:", outputs)
+            outputs_mask = F.interpolate(outputs_mask, size=(1024, 1024), mode='bilinear', align_corners=False)
+            cls_loss = nn.CrossEntropyLoss()(output_cls, labels)
+            # print("cls_loss:", cls_loss.item())
             segment_loss = structure_loss(outputs_mask, mask_tensor)
-            loss = logit_loss + segment_loss
-            # print("llm_loss:", logit_loss, "segment_loss:", segment_loss)
-            # print("======================")
-            # print("mask_tensor:", mask_tensor)
-            # print("loss:", loss)
-        # print("loss:", loss.item())
+            
+            # if epoch < 2:
+            # print(segment_loss, logit_loss)
+            loss = segment_loss + logit_loss + cls_loss
+
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    if torch.isnan(param.grad).any():
-                        print(f"❗ NaN in gradient of {name}")
-                        break 
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
             optimizer.step()  
-                    
+
             ep_loss += loss.item()
             avg_loss = ep_loss / (progress_bar.n + 1)
             total_llm_loss += logit_loss.item()
             total_segment_loss += segment_loss.item()
+            total_cls_loss += cls_loss.item()
             avg_llm_loss = total_llm_loss / (progress_bar.n + 1)
             avg_segment_loss = total_segment_loss / (progress_bar.n + 1)
+            avg_cls_loss = total_cls_loss / (progress_bar.n + 1)
             if progress_bar.n % 1000 == 0:
-                logging.info(f"Epoch [{epoch+1}/{num_epochs}], Step [{progress_bar.n}], Loss: {avg_loss}, LLM Loss: {avg_llm_loss}, Segment Loss: {avg_segment_loss}")
-            progress_bar.set_postfix(loss=avg_loss, llm_loss=avg_llm_loss, segment_loss=avg_segment_loss)
+                logging.info(f"Epoch [{epoch+1}/{num_epochs}], Step [{progress_bar.n}], Loss: {avg_loss}, LLM Loss: {avg_llm_loss}, Segment Loss: {avg_segment_loss}, Cls Loss: {avg_cls_loss}")
+            progress_bar.set_postfix(loss=avg_loss, llm_loss=avg_llm_loss, segment_loss=avg_segment_loss, cls_loss=avg_cls_loss)
             # print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
             # break
         scheduler.step()
@@ -132,7 +143,7 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-        model.save_model(f"weights_1/llm_seg_{epoch+1}")
+        model.save_model(f"/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_{epoch+1}")
         # break
 
 # torch.set_default_device("cuda")
@@ -147,7 +158,7 @@ model, tokenizer, image_processor, config = build_llm_seg(
 
 dataloader = create_dataloader(
     data_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data",
-    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation",
+    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2",
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
@@ -159,9 +170,25 @@ model.to(device)
 
 optimizer = torch.optim.AdamW(
     model.parameters(),
-    lr=1e-4,
-    weight_decay=1e-5
+    lr = 1e-4,
+    weight_decay=1e-5,
+    eps = 1e-6
 )
+
+# optimizer = torch.optim.Adam(
+#     model.parameters(),
+#     lr=1e-4,
+#     betas=(0.9, 0.999),
+#     eps=1e-8,
+#     weight_decay=1e-5
+# )
+# optimizer = Adam16(
+#     model.parameters(),
+#     lr=1e-4,
+#     betas=(0.9, 0.999),
+#     eps=1e-8,
+#     weight_decay=1e-5
+# )
 
 train_params = count_train_parameters(model)
 print("Trainable parameters:", train_params)
@@ -169,8 +196,8 @@ train(
     model=model,
     full_loader=dataloader,
     optimizer=optimizer,
-    num_epochs=10,
+    num_epochs=15,
     device=device
 )
 
-model.load_model("weights/llm_seg_1")
+model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_10")
