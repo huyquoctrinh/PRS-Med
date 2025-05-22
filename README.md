@@ -1,6 +1,6 @@
-# LLM\_segmentation
+# PRS-Med
 
-**LLM\_segmentation** is a modular framework for training and inference of segmentation models powered by large language models (LLMs). It integrates components like LLaVA, Segment Anything, and TinySAM to perform multimodal segmentation tasks.
+**PRS-Med** is a modular framework for training and inference of segmentation models powered by large language models (LLMs). It integrates components like LLaVA, Segment Anything, and TinySAM to perform multimodal segmentation tasks.
 
 ## 🔧 Features
 
