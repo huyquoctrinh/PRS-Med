@@ -71,6 +71,9 @@ def iou_score(pred, mask):
 
 def dice_score(pred, mask):
     pred = torch.sigmoid(pred)
+    # pred = torch.nn.functional.resize(pred, (mask.shape[0], 1, mask.shape[2], mask.shape[3]))
+    pred = torch.nn.functional.interpolate(pred, size=(mask.shape[2], mask.shape[3]), mode='bilinear', align_corners=False)
+    # mask = torch.nn.functional.resize(mask, (mask.shape[0], 1, mask.shape[2], mask.shape[3]))
     inter = (pred * mask).sum(dim=(2, 3))
     union = pred.sum(dim=(2, 3)) + mask.sum(dim=(2, 3))
     union = torch.where(union == 0, inter, union)

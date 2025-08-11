@@ -132,11 +132,11 @@ class MaskDecoder(nn.Module):
         self.norm1 = nn.BatchNorm2d(in_channels)
         self.norm2 = nn.BatchNorm2d(in_channels // 2)
         self.norm3 = nn.BatchNorm2d(in_channels // 4)
-        self.final_conv = nn.Conv2d(in_channels // 8, 1, kernel_size=3, padding=1)  # final 1-channel output
         self.relu = nn.ReLU(inplace=True)
         self.skip1 = SkipConnection(in_channels, in_channels)
         self.skip2 = SkipConnection(in_channels // 2, in_channels // 2)
         self.skip3 = SkipConnection(in_channels // 4, in_channels // 4)
+        self.final_conv = nn.Conv2d(in_channels // 8, 1, kernel_size=3, padding=1) 
 
     def forward(self, x):
         x = self.skip1(x)
@@ -289,17 +289,6 @@ class PromptedMaskDecoder(nn.Module):
         torch.nn.init.xavier_uniform_(self.ffn.fc1.weight)
         torch.nn.init.ones_(self.ffn.fc1.bias)
 
-        # self.decoder = nn.Sequential(
-        #     BasicBlock(image_dim, image_dim // 2),
-        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
-        #     BasicBlock(image_dim //2, image_dim // 4),
-        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
-        #     BasicBlock(image_dim // 4, image_dim // 8),
-        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
-        #     BasicBlock(image_dim // 8, image_dim // 16),
-        #     nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
-        # )
-
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=256, nhead=16, batch_first=True, activation = "relu", dim_feedforward=512)
         torch.nn.init.xavier_uniform_(self.encoder_layer.self_attn.in_proj_weight)
         torch.nn.init.xavier_uniform_(self.encoder_layer.self_attn.out_proj.weight)
@@ -316,16 +305,12 @@ class PromptedMaskDecoder(nn.Module):
             BasicBlock(image_dim // 2, image_dim // 4),
         )
 
-        # self.conv1 = nn.Conv2d(image_dim, image_dim, kernel_size=3, padding=1, stride = 1)
-        # self.gen1 = nn.Sequential(
-        #     nn.Linear(image_dim, image_dim),
-        #     nn.ReLU(),
-        #     nn.Linear(image_dim, image_dim),
-        # )
-        # self.up1 = 
         self.relu = nn.ReLU(inplace=True)
         self.out_dec = nn.Conv2d(image_dim // 4, 1, 1)
-
+        self.image_norm = nn.LayerNorm(image_dim, eps=1e-5)
+        self.prompt_norm = nn.LayerNorm(image_dim, eps=1e-5)
+        torch.nn.init.xavier_uniform_(self.out_dec.weight)
+        torch.nn.init.zeros_(self.out_dec.bias)
         # self.decoder = MaskDecoder(image_dim)
 
     def forward(self, image_feat, prompt_feat):
@@ -335,6 +320,7 @@ class PromptedMaskDecoder(nn.Module):
         """
         B, _, H, W = image_feat.shape
         T = prompt_feat.shape[1]
+        image_feat = image_feat.float()
 
         prompt_feat = prompt_feat.float()
         # print("prompt_proj before nan or inf:", torch.isnan(prompt_feat).any(), torch.isinf(prompt_feat).any())
@@ -344,7 +330,10 @@ class PromptedMaskDecoder(nn.Module):
         # print("prompt_proj nan or inf:", torch.isnan(prompt_proj).any(), torch.isinf(prompt_proj).any())
         # print("position of nan:", torch.where(torch.isnan(prompt_proj)))
         image_flat = image_feat.flatten(2).transpose(1, 2)  # (B, H*W, hidden_dim)
+        image_flat = self.image_norm(image_flat)  # (B, H*W, hidden_dim)
+        prompt_proj = self.prompt_norm(prompt_proj)
         attn_out, _ = self.attn(image_flat, prompt_proj, prompt_proj)  # (B, H*W, hidden_dim)
+        attn_out = attn_out + image_flat  # (B, H*W, hidden_dim)
         # print("image_proj nan or inf:", torch.isnan(image_feat).any(), torch.isinf(image_feat).any())
          # (B, H*W, hidden_dim)
         # print("attn_out nan or inf:", torch.isnan(attn_out).any(), torch.isinf(attn_out).any())

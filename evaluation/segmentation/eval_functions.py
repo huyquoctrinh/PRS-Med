@@ -190,3 +190,29 @@ def EnhancedMeasure(pred, gt):
     
     score = np.sum(enhanced_mat) / (gt.size - 1 + np.finfo(np.float64).eps)
     return score
+
+def giou(mask_pred, mask_true):
+    assert mask_pred.shape == mask_true.shape
+
+    # Binary masks
+    mask_pred = mask_pred.astype(np.uint8)
+    mask_true = mask_true.astype(np.uint8)
+
+    # Intersection and union
+    intersection = np.logical_and(mask_pred, mask_true).sum()
+    union = np.logical_or(mask_pred, mask_true).sum()
+    iou = intersection / union if union > 0 else 0.0
+
+    # Enclosing box over union
+    combined = np.logical_or(mask_pred, mask_true).astype(np.uint8)
+    coords = np.argwhere(combined)
+    if coords.size == 0:
+        return 0.0  # No object present
+
+    y_min, x_min = coords.min(axis=0)
+    y_max, x_max = coords.max(axis=0)
+
+    enclosing_area = (y_max - y_min + 1) * (x_max - x_min + 1)
+    giou = iou - (enclosing_area - union) / enclosing_area
+    return giou
+

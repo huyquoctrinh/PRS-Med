@@ -1,0 +1,22 @@
+2025-05-05 16:54:51,280 - INFO - Already found a `peft_config` attribute in the model. This will lead to having multiple adapters in the model. Make sure to know what you are doing!
+2025-05-05 16:54:58,043 - INFO - Epoch [1/15], Step [0], Loss: 2.8209242820739746, Segment Loss: 0.2193618267774582, Cls Loss: 2.6015625
+2025-05-05 16:56:14,196 - INFO - Already found a `peft_config` attribute in the model. This will lead to having multiple adapters in the model. Make sure to know what you are doing!
+2025-05-05 16:56:23,900 - INFO - Epoch [1/15], Step [0], Loss: 0.10969924926757812, Segment Loss: 0.10649299621582031, Cls Loss: 0.0032062530517578125
+2025-05-05 16:57:07,364 - INFO - Already found a `peft_config` attribute in the model. This will lead to having multiple adapters in the model. Make sure to know what you are doing!
+2025-05-05 16:57:18,429 - INFO - Epoch [1/15], Step [0], Loss: 2.088259696960449, Segment Loss: 0.11267372965812683, Cls Loss: 1.9755859375
+2025-05-05 17:25:32,879 - INFO - Epoch [1/15], Step [1000], Loss: 0.5281123005218439, Segment Loss: 0.18781755531167652, Cls Loss: 0.3402947455376655
+2025-05-05 17:42:56,947 - INFO - Epoch [1/15], Loss: 0.48537788531370346
+2025-05-05 17:46:41,912 - INFO - Epoch [1/15], Val mean Dice Score: 0.9322573916779624
+2025-05-05 17:46:45,794 - INFO - Epoch [2/15], Step [0], Loss: 0.43580907583236694, Segment Loss: 0.15797704458236694, Cls Loss: 0.27783203125
+2025-05-05 18:14:57,776 - INFO - Epoch [2/15], Step [1000], Loss: 0.4883416545736444, Segment Loss: 0.1935100211323677, Cls Loss: 0.29483163321053946
+2025-05-05 18:32:21,411 - INFO - Epoch [2/15], Loss: 0.4773066349986459
+2025-05-05 18:36:06,216 - INFO - Epoch [2/15], Val mean Dice Score: 0.9206966171662013
+2025-05-05 18:36:10,287 - INFO - Epoch [3/15], Step [0], Loss: 0.45983409881591797, Segment Loss: 0.20397472381591797, Cls Loss: 0.255859375
+2025-05-05 19:04:22,342 - INFO - Epoch [3/15], Step [1000], Loss: 0.48451800971895786, Segment Loss: 0.20252997804801542, Cls Loss: 0.28198803149975027
+2025-05-05 19:10:27,479 - INFO - Epoch [1/15], Step [0], Loss: 5.384760856628418, LLM Loss: 3.428705930709839, Cls Loss: 1.9560546875
+2025-05-05 19:13:15,027 - INFO - Epoch [1/15], Step [0], Loss: 5.327126979827881, LLM Loss: 3.426736354827881, Cls Loss: 1.900390625
+2025-05-05 19:46:17,094 - INFO - Epoch [1/15], Step [1000], Loss: 1.0255118864220936, LLM Loss: 0.3886936264974135, Cls Loss: 0.6368182598651349
+2025-05-05 20:19:20,841 - INFO - Epoch [1/15], Step [2000], Loss: 0.7767214794447278, LLM Loss: 0.3180390616198411, Cls Loss: 0.45868241721424446
+2025-05-05 20:52:28,515 - INFO - Epoch [1/15], Step [3000], Loss: 0.6621799617856791, LLM Loss: 0.2910797337528786, Cls Loss: 0.3711002277398419
+2025-05-05 21:00:11,867 - INFO - Epoch [1/15], Loss: 0.6453561117445236
+2025-05-05 21:00:15,376 - INFO - Epoch [2/15], Step [0], Loss: 0.2824825644493103, LLM Loss: 0.2207455039024353, Cls Loss: 0.061737060546875

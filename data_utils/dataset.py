@@ -55,7 +55,7 @@ class PromptSegmentDataset(Dataset):
 
     def answer_process(self, question, prompt, answer):
         # Process the answer to get the input_ids
-        input_prompt = "<image>\n" + f"### User: {question} \n" + "### Assistant: \n" + answer + " " + prompt
+        input_prompt = "<image>\n" + f"### User: {question} \n" + "### Assistant: \n" + answer
         # print("Input prompt:", input_prompt)
         answer_ids = tokenizer_image_token(
             input_prompt, 
@@ -109,20 +109,20 @@ class PromptSegmentDataset(Dataset):
         image_path = mask_path.replace("train_masks", "train_images").replace("_Segmentation", "")
         if "ISIC" in image_path:
             image_path = image_path.replace(".png", ".jpg")
-        if "skin" in image_path:
-            label = 6
+        if "ISIC" in image_path:
+            label = 4
         elif "breast" in image_path:
             label = 1
         elif "brain" in image_path:
             label = 0
-        elif "dental" in image_path:
-            label = 2
+        # elif "dental" in image_path:
+            # label = 2
         elif "lung_CT" in image_path:
-            label = 3
+            label = 2
         elif "lung_Xray" in image_path:
-            label = 4
-        else:
             label = 3
+        else:
+            label = 5
         
         prompt = self.annotation_df.iloc[idx]['description']
         question = self.annotation_df.iloc[idx]['question']
@@ -211,7 +211,7 @@ def create_dataloader(
         batch_size=batch_size, 
         shuffle=True, 
         collate_fn=collate_fn,
-        num_workers=16,
+        num_workers=8,
         pin_memory=True
     )
 
@@ -220,7 +220,7 @@ def create_dataloader(
         batch_size=batch_size, 
         shuffle=False, 
         collate_fn=collate_fn,
-        num_workers=4,
+        num_workers=8,
         pin_memory=True
     )
     dataloader = {

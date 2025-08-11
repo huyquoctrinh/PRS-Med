@@ -1,0 +1,2 @@
+model-v1 go with mask_decoder_v6
+model_v7 go with mask_decoder_v6/v5

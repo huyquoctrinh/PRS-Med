@@ -1,0 +1,2 @@
+method, meanDic, meanIoU, wFm, Sm, meanEm, mae, maxEm, maxDic, maxIoU, meanSen, maxSen, meanSpe, maxSpe
+result_biomedparse,0.0884,0.0603,0.0918,0.4507,0.3126,0.1550,0.3954,0.2777,0.1636,0.0649,1.0000,0.8816,0.9284,

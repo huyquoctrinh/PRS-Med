@@ -48,8 +48,8 @@ if __name__ == "__main__":
     print(tokenizer.pad_token_id)
     # print(tokenizer.IMAGE_TOKEN_ID)
 
-    image = load_image("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/lung_CT/test_images/ID00010637202177584971671_25.jpg")
-    prompt = "<image> \n There is a nodule in the ct image. What is inside this image?"
+    image = load_image("/home/mamba/ML_project/Testing/Huy/llm_seg/image.png")
+    prompt = "<image> \n #User: Where is the tumour in this left breast image?"
 
     image_tensor = process_images([image], image_processor, model.config)
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     )
     print(output_ids)
     print(output_ids.shape)
-    outputs = tokenizer.decode(output_ids[0, input_ids.shape[1]:], skip_special_tokens=True)
+    outputs = tokenizer.decode(output_ids[0], skip_special_tokens=True)
     print(outputs)
     # print(output_ids)
     # print(len(output_ids['hidden_states']))

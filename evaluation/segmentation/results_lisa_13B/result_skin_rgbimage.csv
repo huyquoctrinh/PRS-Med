@@ -1,0 +1,2 @@
+method, meanDic, meanIoU, wFm, Sm, meanEm, mae, maxEm, maxDic, maxIoU, meanSen, maxSen, meanSpe, maxSpe
+result_lisa_13B,0.7934,0.7626,0.8845,0.8805,0.8943,0.0869,0.8968,0.8954,0.8648,0.9464,1.0000,0.9239,0.9275,
