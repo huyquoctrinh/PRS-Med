@@ -47,10 +47,9 @@ class LLMSeg(nn.Module):
         lora_config = LoraConfig(
             r=16,
             lora_alpha=16,
-            lora_dropout=0.05,
+            lora_dropout=0.1,
             task_type=TaskType.CAUSAL_LM,
-            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"], 
-            inference_mode=False,
+            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
         )
         
         model_name = get_model_name_from_path(model_path)
@@ -102,14 +101,14 @@ class LLMSeg(nn.Module):
     
     def save_model(self, save_path):
         self.model.save_pretrained(save_path + "/lora_adapter")
-        self.tokenizer.save_pretrained(save_path + "/lora_adapter")
+        self.tokenizer.save_pretrained(save_path + "/tokenizer")
         torch.save(self.image_encoder.state_dict(), save_path + "/image_encoder.pth")
         torch.save(self.mask_decoder.state_dict(), save_path + "/mask_decoder.pth")
         torch.save(self.cls.state_dict(), save_path + "/cls.pth")
 
     def load_model(self, load_path):
         print("Loading model from:", load_path)
-        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter/")
+        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/tokenizer/")
         self.mask_decoder.load_state_dict(torch.load(load_path + "/mask_decoder.pth"))
         self.image_encoder.load_state_dict(torch.load(load_path + "/image_encoder.pth"))
         self.model = PeftModel.from_pretrained(self.model, load_path + "/lora_adapter/")
@@ -186,15 +185,24 @@ class LLMSeg(nn.Module):
         else:
             self.model.to(dtype=torch.float16)
 
-        with torch.no_grad():
-            prompt_embedding = self.model.extract_last_hidden_state(
-                input_ids = input_ids,
-                images = image_tensor_for_vlm,
-                do_sample=False,
-                temperature=0,
-                max_new_tokens=max_new_tokens,
-                top_p=top_p
-            )["hidden_states"][-1]
+        # with torch.no_grad():
+            # prompt_embedding = self.model.extract_last_hidden_state(
+            #     input_ids = input_ids,
+            #     images = image_tensor_for_vlm,
+            #     do_sample=False,
+            #     temperature=0,
+            #     max_new_tokens=max_new_tokens,
+            #     top_p=top_p
+            # )["hidden_states"][-1]
+        prompt_embedding = self.model(
+            input_ids = answers,
+            attention_mask=attention_mask,
+            images=image_tensor_for_vlm,
+            use_cache = False,
+            labels=answers,
+            return_dict=True,
+            output_hidden_states=True,
+        )["hidden_states"][-1]
 
         image_embedding = self.image_encoder(image_tensor_for_image_enc)
         # print(image_embedding)
@@ -214,10 +222,12 @@ class LLMSeg(nn.Module):
             return final_mask, output_cls, logit_loss
         else:
             output = self.model(
-                input_ids = input_ids,
+                input_ids = answers,
                 attention_mask=attention_mask,
-                images=image_tensor_for_vlm
-            )
+                images=image_tensor_for_vlm,
+                use_cache = False,
+                labels=answers
+            ).logits
             return final_mask, output
 
 def build_llm_seg(

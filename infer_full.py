@@ -20,7 +20,7 @@ def load_model():
     )
     # model = model.to("cpu")
     # tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full_tuning_6_classes/llm_seg_16")
-    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new/llm_seg_20")
+    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new/llm_seg_17")
     model = model.to("cuda:1")
     return model, tokenizer, image_processor, config
 
@@ -46,16 +46,16 @@ def load_image_for_vlm(image_path, image_processor, config):
     )
     return image_tensor.to(torch.float16)
 
-def process_prompt(image_type, tokenizer):
+def process_prompt(prompt, tokenizer):
     # prompt_for_vlm = "<image>" + " You are doing the segmentation." + prompt
-    template = [
-        f"Can you identify the location of the tumour in this {image_type} medical image?",
-        f"Please describe the tumour’s position in this medical image of types {image_type}",
-        f"What is the anatomical location of the tumour in this {image_type} medical image?",
-        f"Based on this {image_type} medical image, can you provide the location of the tumour in this image?",
-        f"Where is the tumour located in this {image_type} medical image?",
-    ]
-    prompt_for_vlm = "<image>\n" + f"### User: {random.choice(template)} \n"
+    # template = [
+    #     f"Can you identify the location of the tumour in this {image_type} medical image?",
+    #     f"Please describe the tumour’s position in this medical image of types {image_type}",
+    #     f"What is the anatomical location of the tumour in this {image_type} medical image?",
+    #     f"Based on this {image_type} medical image, can you provide the location of the tumour in this image?",
+    #     f"Where is the tumour located in this {image_type} medical image?",
+    # ]
+    prompt_for_vlm = "<image>\n" + f"### User: As a doctor, and you are seeing the image, {prompt}\n"
     print("Prompt:", prompt_for_vlm)
     input_ids = tokenizer_image_token(
         prompt_for_vlm,
@@ -111,7 +111,7 @@ def infer(
     image_tensor_for_sam = transform_for_sam(image_path)
     image_tensor_for_sam = image_tensor_for_sam.to(device)
     image_tensor = image_tensor.to(device)
-    input_ids = process_prompt(modal, tokenizer)
+    input_ids = process_prompt(prompt, tokenizer)
     input_ids_for_seg = process_prompt_seg(modal, tokenizer).to(device)
     input_ids = input_ids.to(device)
     # print(input_ids.shape)
@@ -125,11 +125,11 @@ def infer(
         with torch.no_grad():
             output_mask, output_ids = model.generate(
                 input_ids = input_ids,
-                input_ids_for_seg = input_ids_for_seg,
+                input_ids_for_seg = None,
                 image_tensor_for_vlm = image_tensor,
                 image_tensor_for_image_enc = image_tensor_for_sam,
                 attention_mask = None,
-                temperature=1,
+                temperature=0.7,
                 max_new_tokens=512,
                 top_p=0.95
             )
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     model, tokenizer, image_processor, config = load_model()
     # image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/brain_tumors_ct_scan/train_images/2.png"
     # prompt = " CT scan demonstrating a dural-based mass along the convexity suggestive of meningioma."
-    results_path = "results/lm_seg_test_3_full_6_classes_16_benchmark_4/"
+    results_path = "results/llm_seg_10_new_model_results_1/"
     
     mask_path = results_path + "/masks/"
     if not os.path.exists(results_path):
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     #     "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/polyp_endoscopy.csv",
     #     "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/skin_rgbimage.csv"
     # ]
-    list_csv_path = ["/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/" + df_dir for df_dir in os.listdir("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2")]
+    list_csv_path = ["/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v3/" + df_dir for df_dir in os.listdir("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2")]
     # df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/lung_Xray.csv")
     # len(df)
     # cnt =0 

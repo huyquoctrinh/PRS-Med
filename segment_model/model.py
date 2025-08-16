@@ -96,22 +96,22 @@ class LLMSeg(nn.Module):
         #     nn.Flatten(),
         #     nn.Linear(256, 6)
         # )
-        torch.nn.init.xavier_uniform_(self.cls[2].weight)
-        torch.nn.init.ones_(self.cls[2].bias)
+        # torch.nn.init.xavier_uniform_(self.cls[2].weight)
+        # torch.nn.init.ones_(self.cls[2].bias)
 
     def get_model_utils(self):
         return self.tokenizer, self.image_processor, self.context_len, self.base_model.config
     
     def save_model(self, save_path):
         self.model.save_pretrained(save_path + "/lora_adapter")
-        self.tokenizer.save_pretrained(save_path + "/lora_adapter")
+        self.tokenizer.save_pretrained(save_path + "/tokenizer")
         torch.save(self.image_encoder.state_dict(), save_path + "/image_encoder.pth")
         torch.save(self.mask_decoder.state_dict(), save_path + "/mask_decoder.pth")
         # torch.save(self.cls.state_dict(), save_path + "/cls.pth")
 
     def load_model(self, load_path):
         print("Loading model from:", load_path)
-        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter/")
+        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/tokenizer/")
         self.mask_decoder.load_state_dict(torch.load(load_path + "/mask_decoder.pth"))
         self.image_encoder.load_state_dict(torch.load(load_path + "/image_encoder.pth"))
         self.model = PeftModel.from_pretrained(self.model, load_path + "/lora_adapter/")

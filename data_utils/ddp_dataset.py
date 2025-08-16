@@ -1,11 +1,18 @@
-import torch
-import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
+import torch
+import random, numpy as np
 from data_utils.utils import load_annotation, load_image, binary_loader
 from llava.mm_utils import tokenizer_image_token
 from llava.mm_utils import process_images
 from torchvision import transforms 
 import os 
+import torch.nn as nn
+def seed_worker(worker_id):
+    """Ensure different randomness in each worker (important for augmentations)."""
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 IGNORE_INDEX = 0
 MAX_PROMPT_LENGTH = 512
@@ -190,7 +197,8 @@ def create_dataloader(
     image_processor,
     tokenizer,
     batch_size=2,
-    mode="train"
+    mode="train",
+    num_workers=8
 ):
     dataset = PromptSegmentDataset(
         data_path=data_path,
@@ -202,33 +210,44 @@ def create_dataloader(
     )
 
     train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, 
+        dataset,
         [int(len(dataset) * 0.9), len(dataset) - int(len(dataset) * 0.9)]
     )
-    
+
+    # 🔑 Detect if distributed is initialized
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        train_sampler = DistributedSampler(train_dataset, shuffle=True)
+        val_sampler   = DistributedSampler(val_dataset, shuffle=False)
+        shuffle_train = False
+        shuffle_val   = False
+    else:
+        train_sampler = None
+        val_sampler   = None
+        shuffle_train = True
+        shuffle_val   = False
+
     train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=batch_size, 
-        shuffle=True, 
+        train_dataset,
+        batch_size=batch_size,
+        sampler=train_sampler,
+        shuffle=shuffle_train,         # ✅ single GPU fallback
         collate_fn=collate_fn,
-        num_workers=8,
-        pin_memory=True
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=seed_worker,
+        persistent_workers=(num_workers > 0)
     )
 
     val_dataloader = DataLoader(
-        val_dataset, 
-        batch_size=batch_size, 
-        shuffle=False, 
+        val_dataset,
+        batch_size=batch_size,
+        sampler=val_sampler,
+        shuffle=shuffle_val,           # ✅ single GPU fallback
         collate_fn=collate_fn,
-        num_workers=8,
-        pin_memory=True
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=seed_worker,
+        persistent_workers=(num_workers > 0)
     )
-    dataloader = {
-        "train": train_dataloader,
-        "val": val_dataloader
-    }
-    
-    return dataloader
 
-# if __name__ == "__main__":
-
+    return {"train": train_dataloader, "val": val_dataloader}

@@ -59,7 +59,7 @@ def train(
 ):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=15,
+        T_max=20,
         eta_min=1e-6
     )
 
@@ -104,7 +104,10 @@ def train(
             
             # if epoch < 2:
             # print(segment_loss, logit_loss, cls_loss)
-            loss = segment_loss + 2 * cls_loss + 2 * logit_loss 
+            if epoch < 5:
+                loss = segment_loss + 0.5* cls_loss + logit_loss 
+            else:
+                loss = segment_loss + logit_loss
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -132,7 +135,7 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-        model.save_model(f"/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new/llm_seg_{epoch+1}")
+        model.save_model(f"/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new_fixed/llm_seg_{epoch+1}")
         # break
 
 # torch.set_default_device("cuda")
@@ -151,7 +154,7 @@ dataloader = create_dataloader(
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
-    batch_size=8,
+    batch_size=4,
     mode="train"
 )
 

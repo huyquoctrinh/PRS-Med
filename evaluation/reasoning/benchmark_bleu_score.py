@@ -119,9 +119,10 @@ def benchmark(df_path_res, df_path_gt):
 
 
 if __name__ == "__main__":
-    df_res_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/results/lm_seg_test_3_full_6_classes_16_benchmark_4"
-    df_gt_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/"
-    list_modal = ["breast_tumors_ct_scan", "brain_tumors_ct_scan", "lung_Xray", "lung_CT", "polyp_endoscopy", "skin_rgbimage"]
+    df_res_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/results/llm_seg_10_new_model_results_1"
+    df_gt_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v3/"
+    # list_modal = ["breast_tumors_ct_scan", "brain_tumors_ct_scan", "lung_Xray", "lung_CT", "polyp_endoscopy", "skin_rgbimage"]
+    list_modal = ["brain_tumors_ct_scan", "lung_Xray", "lung_CT", "polyp_endoscopy", "skin_rgbimage"]
     # print(list_df_res)
     # print(list_df_gt)
     bleu_dict = {}

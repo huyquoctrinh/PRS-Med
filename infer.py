@@ -1,4 +1,4 @@
-from segment_model.model import build_llm_seg
+from segment_model.model_v7 import build_llm_seg
 import torch
 from torch.cuda.amp import autocast
 from PIL import Image
@@ -16,11 +16,11 @@ def load_model():
         model_base=None,
         load_8bit=False,
         load_4bit=False,
-        device="cuda:2"
+        device="cuda:1"
     )
     # model = model.to("cpu")
-    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/weights1/llm_seg_10")
-    model = model.to("cuda:2")
+    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new/llm_seg_10")
+    model = model.to("cuda:1")
     return model, tokenizer, image_processor, config
 
 def transform_for_sam(image_path):
@@ -70,7 +70,7 @@ def infer(
     model,
     tokenizer,
     config,
-    device = "cuda:2"
+    device = "cuda:1"
 ):
     image_tensor = load_image_for_vlm(image_path, image_processor, config)
     image_tensor_for_sam = transform_for_sam(image_path)
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     model, tokenizer, image_processor, config = load_model()
     # image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/brain_tumors_ct_scan/train_images/2.png"
     # prompt = " CT scan demonstrating a dural-based mass along the convexity suggestive of meningioma."
-    results_path = "results/lm_seg_test_1_11"
+    results_path = "results/lm_seg_test_2_new_data"
     
     mask_path = results_path + "/masks/"
     if not os.path.exists(results_path):
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     mask_list = []
     prompt_list = []
     answer_list = []
-    df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/lung_Xray.csv")
+    df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v3/polyp_endoscopy.csv")
     # len(df)
     # cnt =0 
     for i in range(len(df)):
@@ -153,7 +153,7 @@ if __name__ == "__main__":
             image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/" + df.iloc[i]["image_path"]
             idx = df.iloc[i]["image_path"].split("/")[-1].split(".")[0]
             modal = df.iloc[i]["image_path"].split("/")[0]
-            prompt = df.iloc[i]["description"]
+            prompt = df.iloc[i]["question"]
             print("Image path:", image_path)
             print("Prompt:", prompt)
             mask, answer = infer(
