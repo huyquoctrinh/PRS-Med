@@ -11,6 +11,13 @@
 
 ---
 
+## Dataset
+
+For the PRS-Med dataset, it is available in:
+
+- [Drive](http://abc.com): Will comming soon
+- [Huggingface](https://huggingface.co/datasets/huyquoctrinh/PRS-Med)
+
 ## 📁 Repository Structure
 
 ```
