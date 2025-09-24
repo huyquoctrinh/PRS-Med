@@ -1,0 +1,2 @@
+method, meanDic, meanIoU, wFm, Sm, meanEm, mae, maxEm, maxDic, maxIoU, meanSen, maxSen, meanSpe, maxSpe
+save_path,0.4010,0.2997,0.4234,0.5590,0.5652,0.1692,0.5664,0.4011,0.3000,0.3146,1.0000,0.8693,0.8727,

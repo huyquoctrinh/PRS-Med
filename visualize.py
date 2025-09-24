@@ -9,29 +9,40 @@ def visualize_mask_on_image(image, mask):
     # Convert mask to binary
     # overlay  = cv2.addWeighted(image, 0.6, mask, 0.5, 0)
     color_mask = np.zeros_like(image)
-    color_mask[mask>0] = [188, 145, 210]  # Red color for label 1
+    color_mask[mask>100] = [188, 145, 210]  # Red color for label 1
     alpha = 0.7  # transparency for original image
     beta = 0.3   # transparency for mask overlay
     gamma = 0.1   # scalar added to each sum
     print("image.shape:", image.shape, "mask.shape:", color_mask.shape)
     overlay = cv2.addWeighted(image, alpha, color_mask, beta, gamma)
     return overlay
-
-df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/breast_tumors_ct_scan.csv")
-
-image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/" + df.iloc[0]["image_path"].replace("train_masks", "train_images")
-mask_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/" + df.iloc[0]["image_path"]
-print(mask_path)
+# /home/mamba/ML_project/Testing/Huy/llm_seg/results/lm_seg_test_3_full_6_classes_16_benchmark_3/results_lung_CT.csv
+# /home/mamba/ML_project/Testing/Huy/llm_seg/results/lm_seg_test_3_full_6_classes_16_benchmark_3/results_lung_Xray.csv
+idx = 30
+df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/results/lm_seg_test_3_full_6_classes_16_benchmark_3/results_lung_CT.csv")
+modal = "lung_CT"
+image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/" + df.iloc[idx]["image_path"].replace("test_masks", "test_images")
+mask_path = f"/home/mamba/ML_project/Testing/Huy/llm_seg/results/lm_seg_test_3_full_6_classes_16_benchmark_3/masks/{modal}/" + df.iloc[idx]["mask_path"].split("/")[-1]
+# "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/"
+gt_mask = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/"
 print(image_path)
+print(mask_path)
+# image_path = image_path.replace("_Segmentation", "")
+# image_path = image_path.replace(".png", ".jpg")
 image = cv2.imread(image_path)
 mask = cv2.imread(mask_path, 0)
-
+gt_mask = cv2.imread(gt_mask + df.iloc[idx]["image_path"].replace("test_masks", "test_masks"), 0)
 overlay = visualize_mask_on_image(image, mask)
+overlay_gt = visualize_mask_on_image(image, gt_mask)
 
+cv2.imwrite("visualized_overlay_gt.png", overlay_gt)
+
+image = cv2.resize(image, (512, 512))
 cv2.imwrite("visualized_overlay.png", overlay)
-description = df["description"].iloc[0]
-question = df["question"].iloc[0]
-answers = df["position"].iloc[0]
+cv2.imwrite("image.png", image)
+description = df["results"].iloc[idx]
+question = df["prompt"].iloc[idx]
+# answers = df["position"].iloc[0]
 print("Description:", description)
 print("Question:", question)
-print("Answers:", answers)
+# print("Answers:", answers)

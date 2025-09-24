@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn 
 from torch.utils.data import DataLoader
 from data_utils.dataset import PromptSegmentDataset
-from segment_model.model import build_llm_seg
+from segment_model.model_v7 import build_llm_seg
 from torch.amp import autocast
 from llava.mm_utils import get_model_name_from_path
 from llava.utils import disable_torch_init
@@ -26,7 +26,7 @@ def count_train_parameters(model):
     print(f"Number of trainable parameters: {num_params / 1e6:.2f}M")
     return num_params
 
-def evaluate(model, val_loader, device="cuda:0"): 
+def evaluate(model, val_loader, device="cuda:2"): 
     dice_score_list = []
     print("Number of val sample", len(val_loader))
     for batch in tqdm(val_loader, desc="Evaluating"):
@@ -55,11 +55,11 @@ def train(
     full_loader,
     optimizer,
     num_epochs=10,
-    device="cuda:0"
+    device="cuda:2"
 ):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=15,
+        T_max=20,
         eta_min=1e-6
     )
 
@@ -75,20 +75,9 @@ def train(
         total_segment_loss = 0
         total_cls_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{num_epochs}")
-        cnt = 0
-
-        # if epoch > 1:
-        #     model.model.eval()
-        #     for param in model.model.parameters():
-        #         param.requires_grad = False
 
         for batch in progress_bar:
             optimizer.zero_grad()
-            
-                # logging.info(str(progress_bar))
-            # cnt +=1
-            # if cnt > 10:
-                # break
             
             input_ids = batch['input_ids'].to(device)
             image_tensor = batch['image_tensor'].to(device)
@@ -99,7 +88,7 @@ def train(
             labels = batch['label'].to(device)
             torch.autograd.set_detect_anomaly(True)
             
-            with autocast(dtype=torch.float16, device_type=device):
+            with autocast(dtype=torch.bfloat16, device_type=device):
                 outputs_mask, output_cls, logit_loss = model(
                     input_ids = input_ids, 
                     image_tensor_for_vlm = image_tensor, 
@@ -114,11 +103,14 @@ def train(
             segment_loss = structure_loss(outputs_mask, mask_tensor)
             
             # if epoch < 2:
-            # print(segment_loss, logit_loss)
-            loss = segment_loss + logit_loss + cls_loss
+            # print(segment_loss, logit_loss, cls_loss)
+            if epoch < 5:
+                loss = segment_loss + 0.5* cls_loss + logit_loss 
+            else:
+                loss = segment_loss + logit_loss
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()  
 
             ep_loss += loss.item()
@@ -143,11 +135,11 @@ def train(
         mean_dice = evaluate(model, val_dataloader, device=device)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}], Val mean Dice Score: {mean_dice}")
-        model.save_model(f"/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_{epoch+1}")
+        model.save_model(f"/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new_fixed/llm_seg_{epoch+1}")
         # break
 
 # torch.set_default_device("cuda")
-device = "cuda:0"
+device = "cuda:2"
 model, tokenizer, image_processor, config = build_llm_seg(
     model_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/llava-med-v1.5-mistral-7b",
     model_base=None,
@@ -158,11 +150,11 @@ model, tokenizer, image_processor, config = build_llm_seg(
 
 dataloader = create_dataloader(
     data_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data",
-    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2",
+    annotation_path="/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v3",
     data_config=config,
     image_processor=image_processor,
     tokenizer=tokenizer,
-    batch_size=8,
+    batch_size=4,
     mode="train"
 )
 
@@ -196,8 +188,8 @@ train(
     model=model,
     full_loader=dataloader,
     optimizer=optimizer,
-    num_epochs=15,
+    num_epochs=20,
     device=device
 )
 
-model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_10")
+# model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/freeze_sam_med_llava_med/llm_seg_10")

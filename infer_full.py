@@ -1,4 +1,4 @@
-from segment_model.model import build_llm_seg
+from segment_model.model_v7 import build_llm_seg
 import torch
 from torch.cuda.amp import autocast
 from PIL import Image
@@ -9,18 +9,19 @@ from llava.mm_utils import tokenizer_image_token
 import cv2
 import numpy as np
 import os
-
+import random
 def load_model():
     model, tokenizer, image_processor, config = build_llm_seg(
         model_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/llava-med-v1.5-mistral-7b",
         model_base=None,
         load_8bit=False,
         load_4bit=False,
-        device="cuda:2"
+        device="cuda:1"
     )
     # model = model.to("cpu")
-    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full/llm_seg_12")
-    model = model.to("cuda:2")
+    # tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/weights3_full_tuning_6_classes/llm_seg_16")
+    tokenizer = model.load_model("/home/mamba/ML_project/Testing/Huy/llm_seg/training_results/train_sam_med_llava_med_new/llm_seg_17")
+    model = model.to("cuda:1")
     return model, tokenizer, image_processor, config
 
 def transform_for_sam(image_path):
@@ -47,7 +48,15 @@ def load_image_for_vlm(image_path, image_processor, config):
 
 def process_prompt(prompt, tokenizer):
     # prompt_for_vlm = "<image>" + " You are doing the segmentation." + prompt
-    prompt_for_vlm = "<image>\n" + f"### User: {prompt} \n"
+    # template = [
+    #     f"Can you identify the location of the tumour in this {image_type} medical image?",
+    #     f"Please describe the tumour’s position in this medical image of types {image_type}",
+    #     f"What is the anatomical location of the tumour in this {image_type} medical image?",
+    #     f"Based on this {image_type} medical image, can you provide the location of the tumour in this image?",
+    #     f"Where is the tumour located in this {image_type} medical image?",
+    # ]
+    prompt_for_vlm = "<image>\n" + f"### User: As a doctor, and you are seeing the image, {prompt}\n"
+    print("Prompt:", prompt_for_vlm)
     input_ids = tokenizer_image_token(
         prompt_for_vlm,
         tokenizer,
@@ -56,8 +65,17 @@ def process_prompt(prompt, tokenizer):
     )
     return input_ids.to(torch.int64).unsqueeze(0)
 
-def process_prompt_seg(prompt, tokenizer):
-    prompt_for_vlm = "<image> \n" + prompt
+def process_prompt_seg(image_type, tokenizer):
+    template = [
+        f"Can you identify the location of the tumour in this {image_type} medical image?",
+        f"Please describe the tumour’s position in this medical image of types {image_type}",
+        f"What is the anatomical location of the tumour in this {image_type} medical image?",
+        f"Based on this {image_type} medical image, can you provide the location of the tumour?",
+        f"Where is the tumour located in this {image_type} medical image?",
+    ]
+    question = str(random.choice(template))
+    prompt_for_vlm = "<image> \n" + question
+    # print("Prompt:", prompt_for_vlm)
     input_ids = tokenizer_image_token(
         prompt_for_vlm,
         tokenizer,
@@ -73,14 +91,28 @@ def infer(
     model,
     tokenizer,
     config,
-    device = "cuda:2"
+    device = "cuda:1"
 ):
+    if "ct" in image_path:
+        modal = "ct"
+    elif "xray" in image_path:
+        modal = "Xray"
+    elif "endoscopy" in image_path:
+        modal = "endoscopy"
+    elif "rgb" in image_path:
+        modal = "rgb"
+    elif "brain" in image_path:
+        modal = "mri"
+    elif "breast" in image_path:
+        modal = "ultrasound"
+    else:
+        modal = "CT"
     image_tensor = load_image_for_vlm(image_path, image_processor, config)
     image_tensor_for_sam = transform_for_sam(image_path)
     image_tensor_for_sam = image_tensor_for_sam.to(device)
     image_tensor = image_tensor.to(device)
     input_ids = process_prompt(prompt, tokenizer)
-    input_ids_for_seg = process_prompt_seg(prompt, tokenizer).to(device)
+    input_ids_for_seg = process_prompt_seg(modal, tokenizer).to(device)
     input_ids = input_ids.to(device)
     # print(input_ids.shape)
     # print(image_tensor.shape)
@@ -93,14 +125,15 @@ def infer(
         with torch.no_grad():
             output_mask, output_ids = model.generate(
                 input_ids = input_ids,
-                input_ids_for_seg = input_ids_for_seg,
+                input_ids_for_seg = None,
                 image_tensor_for_vlm = image_tensor,
                 image_tensor_for_image_enc = image_tensor_for_sam,
                 attention_mask = None,
-                temperature=0.2,
+                temperature=0.7,
                 max_new_tokens=512,
                 top_p=0.95
             )
+
             print(output_mask.shape, output_ids.shape)
             print(output_ids)
             print(output_ids[0, input_ids.shape[1]:])
@@ -129,11 +162,12 @@ def infer(
             # print(outputs_answers)
 
 if __name__ == "__main__":
+    torch.cuda.set_device(1)
     import pandas as pd
     model, tokenizer, image_processor, config = load_model()
     # image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/brain_tumors_ct_scan/train_images/2.png"
     # prompt = " CT scan demonstrating a dural-based mass along the convexity suggestive of meningioma."
-    results_path = "results/lm_seg_test_3_full_2_ckpt_12"
+    results_path = "results/llm_seg_10_new_model_results_1/"
     
     mask_path = results_path + "/masks/"
     if not os.path.exists(results_path):
@@ -141,7 +175,11 @@ if __name__ == "__main__":
         os.makedirs(mask_path)
     # df_res = pd.DataFrame(columns=["image_path", "mask_path", "prompt", "results"])
 
-    list_csv_path = ["/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/" + df_dir for df_dir in os.listdir("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2")]
+    # list_csv_path = [
+    #     "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/polyp_endoscopy.csv",
+    #     "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2/skin_rgbimage.csv"
+    # ]
+    list_csv_path = ["/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v3/" + df_dir for df_dir in os.listdir("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation_v2")]
     # df = pd.read_csv("/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/annotation1/annotation_v1/lung_Xray.csv")
     # len(df)
     # cnt =0 
@@ -157,12 +195,15 @@ if __name__ == "__main__":
             if df.iloc[i]["split"] == "test":
                 # cnt+=1
                 # beo
-                image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/" + df.iloc[i]["image_path"]
+                image_path = "/home/mamba/ML_project/Testing/Huy/llm_seg/dataset/data/" + df.iloc[i]["image_path"].replace("test_masks", "test_images")
+                if "ISIC" in image_path:
+                    image_path = image_path.replace("_Segmentation", "")
+                    image_path = image_path.replace(".png", ".jpg")
                 idx = df.iloc[i]["image_path"].split("/")[-1].split(".")[0]
                 modal = df.iloc[i]["image_path"].split("/")[0]
                 prompt = df.iloc[i]["question"]
                 print("Image path:", image_path)
-                print("Prompt:", prompt)
+                # print("Prompt:", prompt)
                 mask, answer = infer(
                     prompt,
                     image_path,

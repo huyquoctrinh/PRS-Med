@@ -1,0 +1,2 @@
+method, meanDic, meanIoU, wFm, Sm, meanEm, mae, maxEm, maxDic, maxIoU, meanSen, maxSen, meanSpe, maxSpe
+masks,0.1119,0.0665,0.1364,0.4519,0.3444,0.1555,0.7801,0.5126,0.3504,0.0855,1.0000,0.9617,0.9993,

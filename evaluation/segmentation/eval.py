@@ -63,6 +63,8 @@ def evaluate(opt, args):
 
         for i, sample in samples:
             pred, gt = sample
+            # print("Pred:", pred, "GT:", gt)
+            # print("Data:",os.path.splitext(pred)[0], os.path.splitext(gt)[0])
             assert os.path.splitext(pred)[0] == os.path.splitext(gt)[0]
 
             # pred_mask = np.array(Image.open(os.path.join(pred_root, pred)))

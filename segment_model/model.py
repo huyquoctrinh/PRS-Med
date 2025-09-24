@@ -12,6 +12,8 @@ import peft
 from peft import LoraConfig, TaskType, get_peft_model
 from peft import PeftModel
 import math 
+from sam_med.segment_anything import sam_model_registry
+from argparse import Namespace
 # from segment_anything import sam_model_registry
 
 
@@ -20,6 +22,20 @@ def custom_lora_init(module):
         nn.init.kaiming_uniform_(module.lora_A.weight, a=math.sqrt(5))
     if hasattr(module, "lora_B"):
         nn.init.zeros_(module.lora_B.weight)
+
+class SamMedImageEncoder(nn.Module):
+    def __init__(self):
+        super(SamMedImageEncoder, self).__init__()
+        args = Namespace()
+        args.image_size = 256
+        args.encoder_adapter = True
+        args.sam_checkpoint = "/home/mamba/ML_project/Testing/Huy/gaussian_splatting/SAM-Med2D/pretrained/sam-med2d_b.pth"
+        self.sam = sam_model_registry["vit_b"](args)
+        self.image_encoder = self.sam.image_encoder
+
+    def forward(self, inputs):
+        # with torch.no_grad():
+        return self.image_encoder(inputs)
 
 class ImageEncoder(nn.Module):
     def __init__(self, model_type, checkpoint_path):
@@ -47,7 +63,7 @@ class LLMSeg(nn.Module):
         lora_config = LoraConfig(
             r=16,
             lora_alpha=16,
-            lora_dropout=0.05,
+            lora_dropout=0.1,
             task_type=TaskType.CAUSAL_LM,
             target_modules=["q_proj", "v_proj", "k_proj", "o_proj"], 
             inference_mode=False,
@@ -68,53 +84,38 @@ class LLMSeg(nn.Module):
         # self.model.to(dtype=torch.float32)
         if self.training:
             self.model.to(dtype=torch.bfloat16)
-        # else:
-        #     self.model.to(dtype=torch.float32)
-        # for param in self.model.parameters():
-        #     param.requires_grad = False
-
-        # self.model = self.model.to_fp32()
 
         self.mask_decoder = PromptedMaskDecoder()
-
-        self.image_encoder = ImageEncoder(
-            model_type="vit_t",
-            checkpoint_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/sam_ckpts/tinysam_42.3.pth"
-        )
-        # self.image_encoder = ImageEncoder(
-        #     model_type="vit_b",
-        #     checkpoint_path="/home/mamba/ML_project/Testing/Huy/llm_seg/weight/sam_ckpts/sam_vit_b_01ec64.pth"
+        self.image_encoder = SamMedImageEncoder()
+        self.loss = nn.CrossEntropyLoss(ignore_index=-100)
+        if self.training:
+            self.mask_decoder.train()
+            self.image_encoder.train()
+        # self.cls = nn.Sequential(
+        #     nn.AdaptiveAvgPool2d((1, 1)),
+        #     nn.Flatten(),
+        #     nn.Linear(256, 6)
         # )
-        self.image_encoder.train()
-        self.cls = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-            nn.Linear(256, 7)
-        )
-        torch.nn.init.xavier_uniform_(self.cls[2].weight)
-        torch.nn.init.ones_(self.cls[2].bias)
-
-        # for param in self.image_encoder.parameters():
-            # param.requires_grad = False
+        # torch.nn.init.xavier_uniform_(self.cls[2].weight)
+        # torch.nn.init.ones_(self.cls[2].bias)
 
     def get_model_utils(self):
         return self.tokenizer, self.image_processor, self.context_len, self.base_model.config
     
     def save_model(self, save_path):
         self.model.save_pretrained(save_path + "/lora_adapter")
-        self.tokenizer.save_pretrained(save_path + "/lora_adapter")
+        self.tokenizer.save_pretrained(save_path + "/tokenizer")
         torch.save(self.image_encoder.state_dict(), save_path + "/image_encoder.pth")
         torch.save(self.mask_decoder.state_dict(), save_path + "/mask_decoder.pth")
-        torch.save(self.cls.state_dict(), save_path + "/cls.pth")
+        # torch.save(self.cls.state_dict(), save_path + "/cls.pth")
 
     def load_model(self, load_path):
         print("Loading model from:", load_path)
-        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/lora_adapter/")
+        self.tokenizer = self.tokenizer.from_pretrained(load_path + "/tokenizer/")
         self.mask_decoder.load_state_dict(torch.load(load_path + "/mask_decoder.pth"))
         self.image_encoder.load_state_dict(torch.load(load_path + "/image_encoder.pth"))
         self.model = PeftModel.from_pretrained(self.model, load_path + "/lora_adapter/")
         self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
-        # self.model.generation_config.IMAGE_TOKEN_ID = self.tokenizer.IMAGE_TOKEN_ID
         self.mask_decoder.to(self.device)
         self.mask_decoder.eval()
         self.model = self.model.merge_and_unload()
@@ -147,16 +148,6 @@ class LLMSeg(nn.Module):
             )
 
             image_embedding = self.image_encoder(image_tensor_for_image_enc)
-            # shape_embedding = input_ids.shape[-1]
-            # prompt_embedding = self.model.extract_last_hidden_state(
-            #     input_ids = input_ids,
-            #     images = image_tensor_for_vlm,
-            #     do_sample=False,
-            #     temperature=0,
-            #     max_new_tokens=max_new_tokens,
-            #     top_p=top_p
-            # # )["hidden_states"][-1][:shape_embedding, :]
-            
             prompt_embedding = self.base_model.extract_last_hidden_state(
                 input_ids = input_ids_for_seg if input_ids_for_seg is not None else input_ids,
                 images = image_tensor_for_vlm,
@@ -174,26 +165,23 @@ class LLMSeg(nn.Module):
         input_ids,
         image_tensor_for_vlm,
         image_tensor_for_image_enc,
-        attention_mask = None,
-        answers=None,
-        temperature=0.0001,
-        max_new_tokens=512,
-        top_p=0.95
+        answers=None
     ):
         if self.training:
             self.model.to(dtype=torch.bfloat16)
         else:
             self.model.to(dtype=torch.float16)
 
-        with torch.no_grad():
-            prompt_embedding = self.model.extract_last_hidden_state(
-                input_ids = input_ids,
-                images = image_tensor_for_vlm,
-                do_sample=False,
-                temperature=0,
-                max_new_tokens=max_new_tokens,
-                top_p=top_p
-            )["hidden_states"][-1]
+        # with torch.no_grad():
+        output_dict = self.model(
+            input_ids = input_ids,
+            images = image_tensor_for_vlm,
+            return_dict = True,
+            output_hidden_states=True,
+            return_loss = False
+        )
+        prompt_embedding = output_dict["hidden_states"][-1]
+        logits = output_dict["logits"]
 
         image_embedding = self.image_encoder(image_tensor_for_image_enc)
         # print(image_embedding)
@@ -203,21 +191,10 @@ class LLMSeg(nn.Module):
             image_embedding, prompt_embedding
         )
         if self.training:
-            logit_loss = self.model(
-                input_ids = answers,
-                attention_mask=attention_mask,
-                images=image_tensor_for_vlm,
-                use_cache = False,
-                labels=answers
-            ).loss
+            logit_loss = self.loss(logits.view(-1, logits.size(-1)), answers.view(-1))
             return final_mask, output_cls, logit_loss
         else:
-            output = self.model(
-                input_ids = input_ids,
-                attention_mask=attention_mask,
-                images=image_tensor_for_vlm
-            )
-            return final_mask, output
+            return final_mask, logits
 
 def build_llm_seg(
         model_path, 
