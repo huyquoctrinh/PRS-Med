@@ -1,7 +1,7 @@
 <h1 align="center">PRS-Med: Position Reasoning Segmentation in Medical Imaging</h1>
 
 <p align="center">
-  <strong>Quoc-Huy Trinh, Minh-Van Nguyen, Jung Zeng, Ulas Bagci, Debesh Jha</strong>
+  <strong>Quoc-Huy Trinh, Minh-Van Nguyen, Jun Zeng, Debesh Jha*, Ulas Bagci *</strong>
 </p>
 
 <p align="center">
