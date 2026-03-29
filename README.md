@@ -1,10 +1,6 @@
 <h1 align="center">PRS-Med: Position Reasoning Segmentation in Medical Imaging</h1>
 
 <p align="center">
-  <strong>Quoc-Huy Trinh, Minh-Van Nguyen, Jun Zeng, Debesh Jha*, Ulas Bagci *</strong>
-</p>
-
-<p align="center">
   <a href="https://arxiv.org/abs/2505.11872"><img src="https://img.shields.io/badge/arXiv-2505.11872-b31b1b.svg" alt="arXiv"></a>
   <a href="https://huyquoctrinh.github.io/prsmed/"><img src="https://img.shields.io/badge/🌐-Project%20Page-blue.svg" alt="Project Page"></a>
   <a href="https://huggingface.co/huyquoctrinh/PRS-Med"><img src="https://img.shields.io/badge/🤗-Model-orange.svg" alt="HuggingFace Model"></a>
