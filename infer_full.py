@@ -128,7 +128,7 @@ def main():
     parser.add_argument(
         "--checkpoint_path", type=str,
         default="/home/mamba/ML_project/Testing/Huy/llm_seg"
-                "/training_results/train_sam_med_ddp_grad_accum"
+                "/training_results/weights3_full_tuning_6_classes"
                 "/llm_seg_20"
     )
     parser.add_argument(

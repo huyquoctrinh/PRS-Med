@@ -34,7 +34,7 @@ class LLMSeg(nn.Module):
 
         lora_config = LoraConfig(
             r=16,
-            lora_alpha=32,
+            lora_alpha=16,
             lora_dropout=0.05,
             task_type=TaskType.CAUSAL_LM,
             target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
@@ -93,15 +93,21 @@ class LLMSeg(nn.Module):
         torch.save(self.cls.state_dict(), save_path + "/cls.pth")
 
     def load_model(self, load_path):
+        import os
         print("Loading model from:", load_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(load_path + "/tokenizer/")
+        # Tokenizer may be in /tokenizer/ or /lora_adapter/
+        tokenizer_path = load_path + "/tokenizer/"
+        if not os.path.isdir(tokenizer_path):
+            tokenizer_path = load_path + "/lora_adapter/"
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         self.mask_decoder.load_state_dict(
             torch.load(load_path + "/mask_decoder.pth", map_location=self.device))
         self.image_encoder.load_state_dict(
             torch.load(load_path + "/image_encoder.pth", map_location=self.device))
         self.cls.load_state_dict(
             torch.load(load_path + "/cls.pth", map_location=self.device))
-        self.model = PeftModel.from_pretrained(self.base_model, load_path + "/lora_adapter/")
+        self.model = PeftModel.from_pretrained(
+            self.base_model, load_path + "/lora_adapter/")
         self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
         self.model = self.model.merge_and_unload()
         self.base_model = self.model
