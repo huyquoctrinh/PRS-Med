@@ -14,7 +14,7 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-IGNORE_INDEX = 0
+IGNORE_INDEX = -100
 MAX_PROMPT_LENGTH = 512
 
 class PromptSegmentDataset(Dataset):
