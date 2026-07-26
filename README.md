@@ -22,8 +22,8 @@
 **PRS-Med** is a modular framework for training and inference of segmentation models powered by large language models (LLMs). It integrates components like LLaVA, Segment Anything, and TinySAM to perform multimodal position reasoning segmentation tasks in medical imaging.
 
 ## 🔔 News
-
-- **[2025.09.23]** Paper is accepted at CVPRW 2026!
+- **[2026.07.26]** PRS-Med 1.5 is going to be released. It can support multi-turn chat, segmentation as the agent workflow. Stay tuned!
+- **[2026.03.23]** Paper is accepted at CVPRW 2026!
 - **[2025.09.23]** Published the PRS-Med dataset, including Medical Position QA, Multiple Choice QA about position and medical reasoning.
 - **[2025.06.01]** Updated repository of PRS-Med.
 
