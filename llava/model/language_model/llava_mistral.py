@@ -88,6 +88,47 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             return_dict=return_dict
         )
 
+    def forward_with_aligned_labels(
+        self,
+        input_ids: torch.LongTensor,
+        labels: torch.LongTensor,
+        images: torch.FloatTensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        image_sizes: Optional[List[List[int]]] = None,
+    ):
+        """Forward pass that also returns labels realigned to the expanded sequence.
+
+        prepare_inputs_labels_for_multimodal replaces each <image> placeholder
+        with 576 image embeddings, shifting all positions. It already realigns
+        labels to match; returning them lets callers locate specific tokens
+        (e.g. [SEG]) in the hidden states without offset arithmetic.
+
+        Returns (CausalLMOutputWithPast, new_labels).
+        """
+        (
+            _input_ids,
+            position_ids,
+            attention_mask,
+            past_key_values,
+            inputs_embeds,
+            new_labels
+        ) = self.prepare_inputs_labels_for_multimodal(
+            input_ids, None, attention_mask, None, labels, images, image_sizes
+        )
+
+        outputs = super().forward(
+            input_ids=None,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            labels=new_labels,
+            use_cache=False,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        return outputs, new_labels
+
     @torch.no_grad()
     def extract_last_hidden_state(
         self,
