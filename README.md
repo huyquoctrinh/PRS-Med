@@ -59,7 +59,7 @@ cd PRS-Med
 ### 2. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+conda env create -f environment.yml
 ```
 
 ### 3. Download Pretrained Weights *(Will be updated soon)*
